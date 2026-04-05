@@ -1,0 +1,41 @@
+label: "case_08_point_moment"
+description: "Simply supported beam with applied point moment at midspan"
+
+mesh:
+  nodes:
+    - id: 1
+      x: 0.0
+    - id: 2
+      x: 1.0
+    - id: 3
+      x: 2.0
+  elements:
+    - id: 1
+      node_i: 1
+      node_j: 2
+      type: beam
+      material: unit_beam
+    - id: 2
+      node_i: 2
+      node_j: 3
+      type: beam
+      material: unit_beam
+
+materials:
+  unit_beam:
+    E: 1.0
+    A: 1.0
+    I: 1.0
+
+boundary_conditions:
+  - node_id: 1
+    type: pin
+  - node_id: 3
+    type: roller
+
+loads:
+  nodal:
+    - node_id: 2
+      type: point_moment
+      magnitude: 1.0
+  distributed: []

@@ -1,0 +1,39 @@
+label: "case_01_bar_axial"
+description: "Two-element bar under axial point load — validates bar stiffness and u_tip = PL/EA"
+
+mesh:
+  nodes:
+    - id: 1
+      x: 0.0
+    - id: 2
+      x: 0.5
+    - id: 3
+      x: 1.0
+  elements:
+    - id: 1
+      node_i: 1
+      node_j: 2
+      type: bar
+      material: steel
+    - id: 2
+      node_i: 2
+      node_j: 3
+      type: bar
+      material: steel
+
+materials:
+  steel:
+    E: 200.0e9
+    A: 0.01
+    I: 0.0
+
+boundary_conditions:
+  - node_id: 1
+    type: fixed_u
+
+loads:
+  nodal:
+    - node_id: 3
+      type: point_force_x
+      magnitude: 10000.0
+  distributed: []

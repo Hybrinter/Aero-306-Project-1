@@ -1,0 +1,68 @@
+label: "case_06_distributed_load"
+description: "Simply supported beam with uniform distributed transverse load — M_max = wL^2/8"
+
+mesh:
+  nodes:
+    - id: 1
+      x: 0.0
+    - id: 2
+      x: 0.5
+    - id: 3
+      x: 1.0
+    - id: 4
+      x: 1.5
+    - id: 5
+      x: 2.0
+  elements:
+    - id: 1
+      node_i: 1
+      node_j: 2
+      type: beam
+      material: unit_beam
+    - id: 2
+      node_i: 2
+      node_j: 3
+      type: beam
+      material: unit_beam
+    - id: 3
+      node_i: 3
+      node_j: 4
+      type: beam
+      material: unit_beam
+    - id: 4
+      node_i: 4
+      node_j: 5
+      type: beam
+      material: unit_beam
+
+materials:
+  unit_beam:
+    E: 1.0
+    A: 1.0
+    I: 1.0
+
+boundary_conditions:
+  - node_id: 1
+    type: pin
+  - node_id: 5
+    type: roller
+
+loads:
+  nodal: []
+  distributed:
+    - element_id: 1
+      type: distributed_y
+      w_i: -1.0
+      w_j: -1.0
+    - element_id: 2
+      type: distributed_y
+      w_i: -1.0
+      w_j: -1.0
+    - element_id: 3
+      type: distributed_y
+      w_i: -1.0
+      w_j: -1.0
+    - element_id: 4
+      type: distributed_y
+      w_i: -1.0
+      w_j: -1.0

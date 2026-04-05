@@ -1,0 +1,41 @@
+label: "case_04_fixed_fixed"
+description: "Two-element fixed-fixed beam under central point load — statically indeterminate"
+
+mesh:
+  nodes:
+    - id: 1
+      x: 0.0
+    - id: 2
+      x: 1.0
+    - id: 3
+      x: 2.0
+  elements:
+    - id: 1
+      node_i: 1
+      node_j: 2
+      type: beam
+      material: unit_beam
+    - id: 2
+      node_i: 2
+      node_j: 3
+      type: beam
+      material: unit_beam
+
+materials:
+  unit_beam:
+    E: 1.0
+    A: 1.0
+    I: 1.0
+
+boundary_conditions:
+  - node_id: 1
+    type: fixed_all
+  - node_id: 3
+    type: fixed_all
+
+loads:
+  nodal:
+    - node_id: 2
+      type: point_force_y
+      magnitude: -1.0
+  distributed: []

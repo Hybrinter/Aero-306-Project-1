@@ -1,0 +1,35 @@
+label: "case_05_combined_bar_beam"
+description: "Single frame element with combined axial load and tip transverse load"
+
+mesh:
+  nodes:
+    - id: 1
+      x: 0.0
+    - id: 2
+      x: 1.0
+  elements:
+    - id: 1
+      node_i: 1
+      node_j: 2
+      type: frame
+      material: steel
+
+materials:
+  steel:
+    E: 200.0e9
+    A: 0.01
+    I: 1.0e-4
+
+boundary_conditions:
+  - node_id: 1
+    type: fixed_all
+
+loads:
+  nodal:
+    - node_id: 2
+      type: point_force_x
+      magnitude: 10000.0
+    - node_id: 2
+      type: point_force_y
+      magnitude: -5000.0
+  distributed: []
