@@ -1,0 +1,21 @@
+label: "hw1_prob1_coarse"
+mesh:
+  nodes:
+    - {id: 1, x: 10.0}
+    - {id: 2, x: 30.0}
+    - {id: 3, x: 20.0}
+    - {id: 4, x: 0.0}
+  elements:
+    - {id: 1, node_i: 4, node_j: 1, type: beam, material: aluminum}
+    - {id: 2, node_i: 1, node_j: 3, type: beam, material: aluminum}
+    - {id: 3, node_i: 3, node_j: 2, type: beam, material: aluminum}
+materials:
+  aluminum: {E: 1.0e7, A: 0.6695, I: 0.1}
+boundary_conditions:
+  - {node_id: 1, type: roller}
+  - {node_id: 2, type: fixed_all}
+  - {node_id: 3, type: roller}
+loads:
+  nodal:
+    - {node_id: 4, type: point_force_y, magnitude: 5.0}
+  distributed: []

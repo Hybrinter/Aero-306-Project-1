@@ -1,0 +1,51 @@
+2026-04-05 14:28:32 [INFO    ] fea_solver: Logging initialized for case: hw1_prob4_coarse
+2026-04-05 14:28:32 [INFO    ] fea_solver: === FEA Solver started: hw1_prob4_coarse ===
+2026-04-05 14:28:32 [INFO    ] fea_solver: Config: config\hw1_prob4_coarse.yaml
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.assembler: Built DOF map: 10 total DOFs
+2026-04-05 14:28:32 [INFO    ] fea_solver: Assembling global stiffness matrix (10x10)...
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.assembler: Assembled global K: shape (10, 10)
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.assembler: Nodal load 100 applied at node 3 DOF theta (global 5)
+2026-04-05 14:28:32 [INFO    ] fea_solver: Solving displacement system...
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.constraints: Constrained DOFs: [2, 6]
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.constraints: Constrained DOFs: [2, 6]
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.constraints: Free DOFs: [0, 1, 3, 4, 5, 7, 8, 9]
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.constraints: Reduced system: 8 free DOFs, 2 constrained DOFs
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.solver: K_ff condition number: 5.755e+04
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.solver: Max displacement: 3.009007e-02
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.solver: Reactions: [ 0.83208521 -0.83208521]
+2026-04-05 14:28:32 [INFO    ] fea_solver.solver: Solve complete: max|u|=3.0090e-02, max|R|=8.3209e-01
+2026-04-05 14:28:32 [INFO    ] fea_solver: Post-processing element internal forces...
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Element 1: V_range=[-7.6753e-16, -7.6753e-16], M_range=[-4.9964e-14, 1.9217e-15]
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 1
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Element 2: V_range=[8.3209e-01, 8.3209e-01], M_range=[-5.3808e-14, 5.0000e+01]
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 2
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Element 3: V_range=[8.3209e-01, 8.3209e-01], M_range=[-5.0000e+01, -1.1530e-14]
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 3
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Element 4: V_range=[1.2792e-16, 1.2792e-16], M_range=[-9.6085e-15, 1.9217e-15]
+2026-04-05 14:28:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 4
+2026-04-05 14:28:33 [DEBUG   ] fea_solver.constraints: Constrained DOFs: [2, 6]
+2026-04-05 14:28:33 [INFO    ] fea_solver.reporter: Report generated:
+============================================================
+FEA SOLVER REPORT — hw1_prob4_coarse
+============================================================
+Nodes: 5
+Elements: 4
+Total DOFs: 10
+
+--- Nodal Displacements ---
+  Node 1 (x=0.000): v=3.009007e-02 θ=-5.007500e-04
+  Node 2 (x=60.090): v=0.000000e+00 θ=-5.007500e-04
+  Node 3 (x=120.180): v=4.703661e-17 θ=1.001500e-03
+  Node 4 (x=180.270): v=0.000000e+00 θ=-5.007500e-04
+  Node 5 (x=240.360): v=-3.009007e-02 θ=-5.007500e-04
+
+--- Element Forces ---
+  Elem 1: N=0.0000e+00 N, |V|_max=7.6753e-16 N, |M|_max=4.9964e-14 N·m
+  Elem 2: N=0.0000e+00 N, |V|_max=8.3209e-01 N, |M|_max=5.0000e+01 N·m
+  Elem 3: N=0.0000e+00 N, |V|_max=8.3209e-01 N, |M|_max=5.0000e+01 N·m
+  Elem 4: N=0.0000e+00 N, |V|_max=1.2792e-16 N, |M|_max=9.6085e-15 N·m
+2026-04-05 14:28:33 [INFO    ] fea_solver.plotter: SFD saved to outputs\hw1_prob4_coarse\hw1_prob4_coarse_sfd.png
+2026-04-05 14:28:33 [INFO    ] fea_solver.plotter: BMD saved to outputs\hw1_prob4_coarse\hw1_prob4_coarse_bmd.png
+2026-04-05 14:28:34 [INFO    ] fea_solver.plotter: Deformed shape saved to outputs\hw1_prob4_coarse\hw1_prob4_coarse_deformed.png
+2026-04-05 14:28:34 [INFO    ] fea_solver: Plots saved to outputs\hw1_prob4_coarse
+2026-04-05 14:28:34 [INFO    ] fea_solver: === FEA Solver complete ===

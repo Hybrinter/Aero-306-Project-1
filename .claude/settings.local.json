@@ -7,7 +7,13 @@
       "Bash(uv add:*)",
       "Bash(uv run:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"feat: base setup — pyproject.toml, models.py, conftest.py, directory scaffold:*)"
+      "Bash(git commit -m \"feat: base setup — pyproject.toml, models.py, conftest.py, directory scaffold:*)",
+      "Bash(PYTHONUTF8=1 uv run python main.py config/case_01_bar_axial.yaml --no-plot)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(git commit -m \"feat: complete FEA bar/beam solver with TDD — 109 tests passing:*)",
+      "Bash(rm /c/Users/kampw/PycharmProjects/Aero-306-Project-1/.git/index.lock)",
+      "Bash(timeout 5)",
+      "Bash(git commit:*)"
     ]
   }
 }
