@@ -16,11 +16,11 @@ mesh:
   nodes:
     - {id: 1, x: 0.0}
     - {id: 2, x: 2.50375}       # L/8
-    - {id: 3, x: 5.0075}        # L/4 -- roller support
+    - {id: 3, x: 5.0075}        # L/4 -- pin support
     - {id: 4, x: 7.51125}       # 3L/8
     - {id: 5, x: 10.015}        # L/2 -- moment load
     - {id: 6, x: 12.51875}      # 5L/8
-    - {id: 7, x: 15.0225}       # 3L/4 -- roller support
+    - {id: 7, x: 15.0225}       # 3L/4 -- pin support
     - {id: 8, x: 17.52625}      # 7L/8
     - {id: 9, x: 20.03}         # L
   elements:
@@ -40,8 +40,8 @@ materials:
     I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
 
 boundary_conditions:
-  - {node_id: 3, type: roller}   # pin support at x=L/4
-  - {node_id: 7, type: roller}   # pin support at x=3L/4
+  - {node_id: 3, type: pin}   # pin support at x=L/4
+  - {node_id: 7, type: pin}   # pin support at x=3L/4
 
 loads:
   nodal:

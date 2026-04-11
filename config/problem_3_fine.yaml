@@ -37,8 +37,8 @@ materials:
     I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
 
 boundary_conditions:
-  - {node_id: 1, type: pin}     # left support
-  - {node_id: 7, type: roller}  # right support
+  - {node_id: 1, type: fixed_all}     # left support
+  - {node_id: 3, type: pin}  # right support
 
 loads:
   distributed:

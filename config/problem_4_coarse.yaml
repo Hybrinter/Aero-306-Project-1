@@ -33,8 +33,8 @@ materials:
     I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
 
 boundary_conditions:
-  - {node_id: 2, type: roller}   # pin support at x=L/4
-  - {node_id: 4, type: roller}   # pin support at x=3L/4
+  - {node_id: 2, type: pin}   # pin support at x=L/4
+  - {node_id: 4, type: pin}   # pin support at x=3L/4
 
 loads:
   nodal:
