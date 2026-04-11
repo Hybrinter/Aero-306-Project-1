@@ -2,9 +2,9 @@
 
 Usage:
     uv run python main.py                                            # interactive menu
-    uv run python main.py config/case_02_cantilever_beam.yaml
-    uv run python main.py config/case_01_bar_axial.yaml --no-plot
-    uv run python main.py config/case_06_distributed_load.yaml --save-plots outputs/
+    uv run python main.py config/example_case_02_cantilever_beam.yaml
+    uv run python main.py config/example_case_01_bar_axial.yaml --no-plot
+    uv run python main.py config/example_case_06_distributed_load.yaml --save-plots outputs/
 """
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             config (Path | None): Path to YAML case file, or None to trigger
                 interactive selection in main().
             no_plot (bool): Suppress all plot windows if True.
-            save_plots (str | None): Directory to save plot images, or None.
+            save_plots (Path): Directory to save plot images. Default: Path("outputs").
             n_stations (int): Number of evaluation points per element for post-processing.
             log_dir (Path): Directory for log files.
 
@@ -111,8 +111,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-plot", action="store_true", help="Skip rendering plots"
     )
     parser.add_argument(
-        "--save-plots", type=Path, default=None,
-        help="Directory to save plot images (PNG)"
+        "--save-plots", type=Path, default=Path("outputs"),
+        help="Directory to save plot images (PNG) -- default: outputs/"
     )
     parser.add_argument(
         "--log-dir", type=Path, default=Path("logs"),
@@ -188,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     # --- Report ---
     print_nodal_results(result)
     print_reaction_forces(result)
-    print_element_forces(element_results)
+    print_element_forces(element_results, model)
     generate_report(model, dof_map, result, element_results)
 
     # --- Plots ---

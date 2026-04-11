@@ -1,2 +1,2 @@
-- Update outputs formats for readability
+- Update outputs formats to match units
 - Verify outputs match expectations
