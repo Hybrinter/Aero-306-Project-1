@@ -1,0 +1,5 @@
+- Include strong typing everywhere, no gaps
+- Use ```@dataclass(slots=True)``` for all data-carrying structs
+- Use ```dataclasses.replace()``` to construct modified parameter copies
+- No dynamic dispatch
+- No duck typing

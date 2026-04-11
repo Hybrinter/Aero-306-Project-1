@@ -1,0 +1,2 @@
+- Avoid running commands that likely produce large outputs
+- Use "tail" and "head" to limit command output generation

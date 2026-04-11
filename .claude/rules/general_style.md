@@ -1,0 +1,2 @@
+- For non-engineering related variables (such as p for pressure), use snake_case
+- Use ASCII characters only

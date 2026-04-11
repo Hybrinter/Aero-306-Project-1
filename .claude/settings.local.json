@@ -1,19 +1,10 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
-      "Bash(mkdir -p /c/Users/kampw/PycharmProjects/Aero-306-Project-1/config /c/Users/kampw/PycharmProjects/Aero-306-Project-1/logs /c/Users/kampw/PycharmProjects/Aero-306-Project-1/src/fea_solver /c/Users/kampw/PycharmProjects/Aero-306-Project-1/tests/unit /c/Users/kampw/PycharmProjects/Aero-306-Project-1/tests/integration)",
-      "Bash(touch /c/Users/kampw/PycharmProjects/Aero-306-Project-1/logs/.gitkeep)",
-      "Bash(uv venv:*)",
-      "Bash(uv add:*)",
-      "Bash(uv run:*)",
-      "Bash(git add:*)",
-      "Bash(git commit -m \"feat: base setup — pyproject.toml, models.py, conftest.py, directory scaffold:*)",
-      "Bash(PYTHONUTF8=1 uv run python main.py config/case_01_bar_axial.yaml --no-plot)",
-      "Bash(echo \"EXIT:$?\")",
-      "Bash(git commit -m \"feat: complete FEA bar/beam solver with TDD — 109 tests passing:*)",
-      "Bash(rm /c/Users/kampw/PycharmProjects/Aero-306-Project-1/.git/index.lock)",
-      "Bash(timeout 5)",
-      "Bash(git commit:*)"
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=no)"
     ]
   }
 }
