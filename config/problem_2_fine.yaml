@@ -1,0 +1,52 @@
+label: problem_2_fine
+description: >
+  Cantilever beam, fixed at left end (x=0), free at right (x=360 in = 30 ft).
+  EI = 1.0E6 lb-in^2, uniform distributed load f = 0.025 lb/in (upward),
+  tip point load F = 10 lb (downward).
+  Analytical tip deflection: delta = FL^3/(3EI) + fL^4/(8EI) = 2.080 in (downward).
+  Fine mesh: 6 elements of 60 in each.
+unit_system: empirical
+units:
+  length: in
+  modulus: psi
+  area: in^2
+  second_moment: in^4
+  force: lb
+  distributed: lb/in
+
+mesh:
+  nodes:
+    - {id: 1, x: 0.0}
+    - {id: 2, x: 60.0}
+    - {id: 3, x: 120.0}
+    - {id: 4, x: 180.0}
+    - {id: 5, x: 240.0}
+    - {id: 6, x: 300.0}
+    - {id: 7, x: 360.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 2, type: beam, material: section}
+    - {id: 2, node_i: 2, node_j: 3, type: beam, material: section}
+    - {id: 3, node_i: 3, node_j: 4, type: beam, material: section}
+    - {id: 4, node_i: 4, node_j: 5, type: beam, material: section}
+    - {id: 5, node_i: 5, node_j: 6, type: beam, material: section}
+    - {id: 6, node_i: 6, node_j: 7, type: beam, material: section}
+
+materials:
+  section:
+    E: 1000000.0   # psi
+    A: 1.0         # in^2
+    I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
+
+boundary_conditions:
+  - {node_id: 1, type: fixed_all}
+
+loads:
+  nodal:
+    - {node_id: 7, type: point_force_y, magnitude: -10.0}   # lb, downward
+  distributed:
+    - {element_id: 1, type: distributed_y, w_i: 0.025, w_j: 0.025}   # lb/in, upward
+    - {element_id: 2, type: distributed_y, w_i: 0.025, w_j: 0.025}
+    - {element_id: 3, type: distributed_y, w_i: 0.025, w_j: 0.025}
+    - {element_id: 4, type: distributed_y, w_i: 0.025, w_j: 0.025}
+    - {element_id: 5, type: distributed_y, w_i: 0.025, w_j: 0.025}
+    - {element_id: 6, type: distributed_y, w_i: 0.025, w_j: 0.025}

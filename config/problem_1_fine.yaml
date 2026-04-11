@@ -1,0 +1,39 @@
+label: problem_1_fine
+description: >
+  Beam with intermediate roller supports and a free overhang.
+  Fixed at x=30 in, rollers at x=10 and x=20 in, free end at x=0.
+  5 lb upward point load at free end. Aluminum: E=10e6 psi, A=0.6695 in^2, I=0.1 in^4.
+  Fine mesh: 6 elements of 5 in each (midpoints at x=5, 15, 25 added).
+unit_system: empirical
+
+mesh:
+  nodes:
+    - {id: 1, x: 10.0}
+    - {id: 2, x: 30.0}
+    - {id: 3, x: 20.0}
+    - {id: 4, x: 0.0}
+    - {id: 5, x: 5.0}
+    - {id: 6, x: 15.0}
+    - {id: 7, x: 25.0}
+  elements:
+    - {id: 1, node_i: 4, node_j: 5, type: beam, material: aluminum}
+    - {id: 2, node_i: 5, node_j: 1, type: beam, material: aluminum}
+    - {id: 3, node_i: 1, node_j: 6, type: beam, material: aluminum}
+    - {id: 4, node_i: 6, node_j: 3, type: beam, material: aluminum}
+    - {id: 5, node_i: 3, node_j: 7, type: beam, material: aluminum}
+    - {id: 6, node_i: 7, node_j: 2, type: beam, material: aluminum}
+
+materials:
+  aluminum:
+    E: 10000000.0   # psi
+    A: 0.6695       # in^2
+    I: 0.1          # in^4
+
+boundary_conditions:
+  - {node_id: 1, type: roller}
+  - {node_id: 2, type: fixed_all}
+  - {node_id: 3, type: roller}
+
+loads:
+  nodal:
+    - {node_id: 4, type: point_force_y, magnitude: 5.0}   # lb, upward
