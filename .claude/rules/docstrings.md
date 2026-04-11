@@ -1,8 +1,9 @@
 - Python files must include a header summary
-- All functions, methods, and classes must include docstrings
+- All non-test-related functions, methods, and classes must include docstrings
 - Docstrings must include:
   - Summary of behavior
   - Inputs with explicit types
   - Outputs with explicit types
   - Notes documenting all non-obvious functionality
 - Update docstrings upon changes
+- Test should only use basic explanation for docstring
