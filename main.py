@@ -25,9 +25,11 @@ from fea_solver.assembler import (
 from fea_solver.io_yaml import load_model_from_yaml
 from fea_solver.logging_config import configure_logging
 from fea_solver.plotter import (
+    plot_axial_displacement,
     plot_bending_moment_diagram,
-    plot_deformed_shape,
+    plot_rotation,
     plot_shear_force_diagram,
+    plot_transverse_displacement,
     show_all_plots,
 )
 from fea_solver.postprocessor import postprocess_all_elements
@@ -199,21 +201,39 @@ def main(argv: list[str] | None = None) -> int:
 
         figures = []
 
-        sfd_path = (save_dir / f"{model.label}_sfd.png") if save_dir else None
+        shear_path = (save_dir / f"{model.label}_shear.png") if save_dir else None
         figures.append(
-            plot_shear_force_diagram(element_results, title=f"SFD -- {model.label}",
-                                     output_path=sfd_path)
+            plot_shear_force_diagram(element_results, model,
+                                     title=f"Shear: {model.label}",
+                                     output_path=shear_path)
         )
 
-        bmd_path = (save_dir / f"{model.label}_bmd.png") if save_dir else None
+        moment_path = (save_dir / f"{model.label}_moment.png") if save_dir else None
         figures.append(
-            plot_bending_moment_diagram(element_results, title=f"BMD -- {model.label}",
-                                        output_path=bmd_path)
+            plot_bending_moment_diagram(element_results, model,
+                                        title=f"Moments: {model.label}",
+                                        output_path=moment_path)
         )
 
-        def_path = (save_dir / f"{model.label}_deformed.png") if save_dir else None
+        vert_disp_path = (save_dir / f"{model.label}_vertical_disp.png") if save_dir else None
         figures.append(
-            plot_deformed_shape(element_results, output_path=def_path)
+            plot_transverse_displacement(element_results, model,
+                                         title=f"Vertical Displacement: {model.label}",
+                                         output_path=vert_disp_path)
+        )
+
+        axial_disp_path = (save_dir / f"{model.label}_axial_disp.png") if save_dir else None
+        figures.append(
+            plot_axial_displacement(element_results, model,
+                                    title=f"Axial Displacement: {model.label}",
+                                    output_path=axial_disp_path)
+        )
+
+        theta_path = (save_dir / f"{model.label}_rotation.png") if save_dir else None
+        figures.append(
+            plot_rotation(element_results, model,
+                          title=f"Rotation: {model.label}",
+                          output_path=theta_path)
         )
 
         if save_dir:

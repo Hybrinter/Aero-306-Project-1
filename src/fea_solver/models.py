@@ -398,22 +398,32 @@ class SolutionResult:
 
 @dataclass(frozen=True, slots=True)
 class ElementResult:
-    """Post-processed internal forces and moments for a single element.
+    """Post-processed internal forces, moments, and displacements for a single element.
 
     Fields:
         element_id (int): Unique element identifier.
-        axial_force (float): Constant axial force [N] (0.0 for pure BEAM elements).
-        shear_forces (NDArray[np.float64]): Shear force at stations, shape (n_stations,) [N].
-        bending_moments (NDArray[np.float64]): Bending moment at stations, shape (n_stations,) [N*m].
+        axial_force (float): Constant axial force (0.0 for pure BEAM elements).
+        shear_forces (NDArray[np.float64]): Shear force at stations, shape (n_stations,).
+        bending_moments (NDArray[np.float64]): Bending moment at stations, shape (n_stations,).
         x_stations (NDArray[np.float64]): Global x-coordinates of evaluation stations, shape (n_stations,).
+        transverse_displacements (NDArray[np.float64]): Transverse displacement v(x) at stations,
+            shape (n_stations,). Zeros for BAR elements (no bending DOFs).
+        axial_displacements (NDArray[np.float64]): Axial displacement u(x) at stations,
+            shape (n_stations,). Zeros for pure BEAM elements (no axial DOF).
+        rotations (NDArray[np.float64]): Cross-section rotation theta(x) at stations [rad],
+            shape (n_stations,). Zeros for BAR elements.
 
     Notes:
-        Frozen and slotted. Shear forces and bending moments are recovered from
-        nodal displacements using Hermite shape function derivatives.
+        Frozen and slotted. Internal forces are recovered from nodal displacements using
+        Hermite shape function derivatives. Displacements use the shape functions directly.
+        All values are in the canonical unit system of the parent FEAModel.
     """
 
     element_id: int
-    axial_force: float                      # N (0.0 for pure BEAM)
-    shear_forces: NDArray[np.float64]       # shape (n_stations,) [N]
-    bending_moments: NDArray[np.float64]    # shape (n_stations,) [N*m]
-    x_stations: NDArray[np.float64]         # global x coords, shape (n_stations,)
+    axial_force: float                               # 0.0 for pure BEAM
+    shear_forces: NDArray[np.float64]                # shape (n_stations,)
+    bending_moments: NDArray[np.float64]             # shape (n_stations,)
+    x_stations: NDArray[np.float64]                  # global x coords, shape (n_stations,)
+    transverse_displacements: NDArray[np.float64]    # v(x), shape (n_stations,); zeros for BAR
+    axial_displacements: NDArray[np.float64]         # u(x), shape (n_stations,); zeros for BEAM
+    rotations: NDArray[np.float64]                   # theta(x) [rad], shape (n_stations,); zeros for BAR
