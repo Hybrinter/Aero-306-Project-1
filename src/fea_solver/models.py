@@ -12,6 +12,8 @@ from enum import Enum, auto
 import numpy as np
 from numpy.typing import NDArray
 
+from fea_solver.units import UnitSystem
+
 # Engineering notation exception: single-letter and compound uppercase variables
 # (E, A, I, L, K, F, R, N, V, M, EI, K_ff, F_f) follow standard FEA/structural
 # engineering conventions and are exempt from the snake_case rule throughout this
@@ -54,8 +56,8 @@ class DOFType(Enum):
         ordering DOFs during assembly and constraint application.
     """
 
-    U = "u"        # axial displacement [m]
-    V = "v"        # transverse displacement [m]
+    U = "u"        # axial displacement [canonical length unit]
+    V = "v"        # transverse displacement [canonical length unit]
     THETA = "theta"  # rotation [rad]
 
 
@@ -288,11 +290,15 @@ class FEAModel:
         nodal_loads (tuple[NodalLoad, ...]): Concentrated forces and moments.
         distributed_loads (tuple[DistributedLoad, ...]): Distributed loads over elements.
         label (str): Optional descriptive label. Default "unnamed".
+        unit_system (UnitSystem): Canonical unit system all numeric values are stored in.
+            Default UnitSystem.SI. Determines reporter column-header labels.
 
     Notes:
         Frozen and slotted. Immutable after construction; use dataclasses.replace()
         to create modified copies. Forms the complete problem specification that
         is assembled into K and F matrices, solved, and post-processed.
+        All field values (node coordinates, material properties, loads) must already
+        be expressed in the canonical units for unit_system before construction.
     """
 
     mesh: Mesh
@@ -300,6 +306,7 @@ class FEAModel:
     nodal_loads: tuple[NodalLoad, ...]
     distributed_loads: tuple[DistributedLoad, ...]
     label: str = "unnamed"
+    unit_system: UnitSystem = UnitSystem.SI
 
 
 # ---------------------------------------------------------------------------

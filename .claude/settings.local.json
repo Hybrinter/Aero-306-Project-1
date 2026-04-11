@@ -4,7 +4,8 @@
   },
   "permissions": {
     "allow": [
-      "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=no)"
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=no)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)"
     ]
   }
 }

@@ -23,30 +23,30 @@ def full_solve(yaml_path: Path) -> tuple:
 
 
 class TestCase05CombinedBarBeam:
-    """case_05_combined_bar_beam.yaml: frame element, axial + transverse loads."""
+    """example_case_05_combined_bar_beam.yaml: frame element, axial + transverse loads."""
     def test_model_solves_without_error(self) -> None:
         """Frame element with combined loads solves without error."""
-        model, dof_map, result, element_results = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
+        model, dof_map, result, element_results = full_solve(CONFIG / "example_case_05_combined_bar_beam.yaml")
         assert result.displacements is not None
         assert len(element_results) == 1
 
     def test_axial_displacement_non_zero(self) -> None:
         """Axial displacement is non-zero."""
-        model, dof_map, result, _ = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
+        model, dof_map, result, _ = full_solve(CONFIG / "example_case_05_combined_bar_beam.yaml")
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         u_tip = result.displacements[dof_map.index(tip_node.id, DOFType.U)]
         assert abs(u_tip) > 0.0
 
     def test_transverse_displacement_non_zero(self) -> None:
         """Transverse displacement is non-zero."""
-        model, dof_map, result, _ = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
+        model, dof_map, result, _ = full_solve(CONFIG / "example_case_05_combined_bar_beam.yaml")
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         v_tip = result.displacements[dof_map.index(tip_node.id, DOFType.V)]
         assert abs(v_tip) > 0.0
 
     def test_internal_forces_non_zero(self) -> None:
         """Internal forces are non-zero."""
-        _, _, _, element_results = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
+        _, _, _, element_results = full_solve(CONFIG / "example_case_05_combined_bar_beam.yaml")
         er = element_results[0]
         assert abs(er.axial_force) > 0.0
 
@@ -58,7 +58,7 @@ class TestCase05CombinedBarBeam:
         E = 200.0e9
         A = 0.01
         analytical_u = P_x * L / (E * A)
-        model, dof_map, result, _ = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
+        model, dof_map, result, _ = full_solve(CONFIG / "example_case_05_combined_bar_beam.yaml")
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         u_tip = result.displacements[dof_map.index(tip_node.id, DOFType.U)]
         assert u_tip == pytest.approx(analytical_u, rel=0.01)
@@ -71,7 +71,7 @@ class TestCase05CombinedBarBeam:
         E = 200.0e9
         I = 1.0e-4
         analytical_v = P_y * L**3 / (3.0 * E * I)
-        model, dof_map, result, _ = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
+        model, dof_map, result, _ = full_solve(CONFIG / "example_case_05_combined_bar_beam.yaml")
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         v_tip = result.displacements[dof_map.index(tip_node.id, DOFType.V)]
         assert v_tip == pytest.approx(analytical_v, rel=0.01)

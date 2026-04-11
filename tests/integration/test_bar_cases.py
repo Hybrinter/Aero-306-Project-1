@@ -24,10 +24,10 @@ def full_solve(yaml_path: Path) -> tuple:
 
 
 class TestCase01BarAxial:
-    """case_01_bar_axial.yaml: 3-node bar, E=200GPa, A=0.01m^2, P=10kN at tip."""
+    """example_case_01_bar_axial.yaml: 3-node bar, E=200GPa, A=0.01m^2, P=10kN at tip."""
     def test_tip_displacement(self) -> None:
         """Tip displacement matches analytical solution."""
-        model, dof_map, result, _ = full_solve(CONFIG / "case_01_bar_axial.yaml")
+        model, dof_map, result, _ = full_solve(CONFIG / "example_case_01_bar_axial.yaml")
         # Tip is at node 3 (x=1.0)
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         u_tip = result.displacements[dof_map.index(tip_node.id, DOFType.U)]
@@ -36,19 +36,19 @@ class TestCase01BarAxial:
 
     def test_reaction_equals_applied_load(self) -> None:
         """Reaction force equals applied load."""
-        model, dof_map, result, _ = full_solve(CONFIG / "case_01_bar_axial.yaml")
+        model, dof_map, result, _ = full_solve(CONFIG / "example_case_01_bar_axial.yaml")
         # Reaction at fixed node must equal -10000 N
         assert abs(result.reactions[0]) == pytest.approx(10000.0, rel=0.01)
 
     def test_axial_forces_equal_applied_load(self) -> None:
         """Internal axial forces equal applied load."""
-        _, _, result, element_results = full_solve(CONFIG / "case_01_bar_axial.yaml")
+        _, _, result, element_results = full_solve(CONFIG / "example_case_01_bar_axial.yaml")
         for er in element_results:
             assert abs(er.axial_force) == pytest.approx(10000.0, rel=0.01)
 
 
 class TestCase07MultiMaterial:
-    """case_07_multi_material.yaml: 3-segment bar, different materials."""
+    """example_case_07_multi_material.yaml: 3-segment bar, different materials."""
     def test_tip_displacement_analytical(self) -> None:
         """Tip displacement matches analytical solution."""
         # u_tip = P * sum(L_i / (E_i * A_i))
@@ -60,7 +60,7 @@ class TestCase07MultiMaterial:
             (1.0, 110.0e9, 0.015),
         ]
         u_analytical = P * sum(L / (E * A) for L, E, A in segments)
-        model, dof_map, result, _ = full_solve(CONFIG / "case_07_multi_material.yaml")
+        model, dof_map, result, _ = full_solve(CONFIG / "example_case_07_multi_material.yaml")
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         u_tip = result.displacements[dof_map.index(tip_node.id, DOFType.U)]
         assert u_tip == pytest.approx(u_analytical, rel=0.01)

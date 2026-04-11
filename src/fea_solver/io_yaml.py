@@ -5,6 +5,15 @@ then converts validated schemas into frozen FEA dataclasses.
 
 Expected YAML schema:
   label: str
+  unit_system: "SI" | "empirical"   (optional, default "SI")
+  units:                             (optional; overrides per-field input units)
+    length: str        e.g. "ft", "m", "in"
+    force: str         e.g. "lb", "N", "kN"
+    modulus: str       e.g. "psi", "Pa", "MPa"
+    area: str          e.g. "in^2", "m^2"
+    second_moment: str e.g. "in^4", "m^4"
+    distributed: str   e.g. "lb/ft", "N/m", "lb/in"
+    moment: str        e.g. "in-lb", "N-m", "ft-lb"
   mesh:
     nodes: [{id: int, x: float}, ...]
     elements: [{id: int, node_i: int, node_j: int, type: str, material: str}, ...]
@@ -15,6 +24,7 @@ Expected YAML schema:
     nodal: [{node_id: int, type: str, magnitude: float}, ...]
     distributed: [{element_id: int, type: str, w_i: float, w_j: float}, ...]
 
+_UnitsSchema:          Pydantic schema for the optional units block.
 _NodeSchema:           Pydantic schema for a single node entry.
 _MaterialSchema:       Pydantic schema for material properties; enforces E > 0, A > 0, I >= 0.
 _ElementSchema:        Pydantic schema for a single element entry (refs resolved later).
@@ -25,7 +35,8 @@ _LoadsSchema:          Pydantic schema for the loads block; defaults both sublis
 _MeshSchema:           Pydantic schema for the mesh block.
 _FEAModelSchema:       Top-level Pydantic schema for the entire YAML file.
 _schema_to_model:      Converts a validated _FEAModelSchema into a FEAModel dataclass,
-                       resolving referential integrity (node refs, duplicate IDs, enum lookups).
+                       resolving referential integrity (node refs, duplicate IDs, enum lookups)
+                       and applying unit conversions via UnitConverter.
 load_model_from_yaml:  Public API -- reads YAML, validates via Pydantic, returns FEAModel.
 """
 from __future__ import annotations
@@ -49,6 +60,12 @@ from fea_solver.models import (
     Mesh,
     Node,
     NodalLoad,
+)
+from fea_solver.units import (
+    CANONICAL_UNITS,
+    UnitConverter,
+    UnitSystem,
+    validate_unit,
 )
 
 logger = logging.getLogger(__name__)
@@ -84,6 +101,42 @@ _LOAD_TYPE_MAP: dict[str, LoadType] = {
 # ---------------------------------------------------------------------------
 # Pydantic schema models  (private -- YAML structure only, no FEA logic)
 # ---------------------------------------------------------------------------
+
+
+class _UnitsSchema(BaseModel):
+    """Pydantic schema for the optional YAML units block.
+
+    Each field specifies the input unit for the corresponding quantity type.
+    Omitted fields default to the canonical unit for the chosen unit_system.
+
+    Args:
+        length (str | None): Unit for node x positions and element lengths.
+            E.g. "m", "ft", "in". Default None (use system canonical).
+        force (str | None): Unit for point force load magnitudes.
+            E.g. "N", "lb", "kN". Default None.
+        modulus (str | None): Unit for Young's modulus E.
+            E.g. "Pa", "psi", "MPa". Default None.
+        area (str | None): Unit for cross-sectional area A.
+            E.g. "m^2", "in^2". Default None.
+        second_moment (str | None): Unit for second moment of area I.
+            E.g. "m^4", "in^4". Default None.
+        distributed (str | None): Unit for distributed load intensities w_i, w_j.
+            E.g. "N/m", "lb/ft", "lb/in". Default None.
+        moment (str | None): Unit for point moment load magnitudes.
+            E.g. "N-m", "in-lb", "ft-lb". Default None.
+
+    Notes:
+        All fields are optional. Non-None values override the system canonical default.
+        Unknown unit strings are validated in _schema_to_model via validate_unit.
+    """
+
+    length:        str | None = None
+    force:         str | None = None
+    modulus:       str | None = None
+    area:          str | None = None
+    second_moment: str | None = None
+    distributed:   str | None = None
+    moment:        str | None = None
 
 
 class _NodeSchema(BaseModel):
@@ -234,6 +287,10 @@ class _FEAModelSchema(BaseModel):
     Args:
         label (str): Human-readable model label. Defaults to "" (overridden from
             filename in load_model_from_yaml if empty).
+        unit_system (str): Canonical unit system -- "SI" or "empirical". Default "SI".
+            Determines the target canonical system for all converted values.
+        units (_UnitsSchema): Optional per-quantity-type input unit overrides.
+            Defaults to an empty schema (all quantities use canonical system defaults).
         mesh (_MeshSchema): Mesh block containing nodes and elements.
         materials (dict[str, _MaterialSchema]): Named material property map.
         boundary_conditions (list[_BCSchema]): List of boundary condition entries.
@@ -243,10 +300,12 @@ class _FEAModelSchema(BaseModel):
     Notes:
         model_validate() is called once in load_model_from_yaml. Field-level errors
         (wrong types, E <= 0) raise pydantic.ValidationError here. Referential
-        integrity errors are deferred to _schema_to_model.
+        integrity errors and unknown unit strings are deferred to _schema_to_model.
     """
 
     label: str = ""
+    unit_system: str = "SI"
+    units: _UnitsSchema = Field(default_factory=_UnitsSchema)
     mesh: _MeshSchema
     materials: dict[str, _MaterialSchema]
     boundary_conditions: list[_BCSchema] = Field(default_factory=list)
@@ -267,20 +326,52 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
 
     Returns:
         FEAModel: Fully constructed and referentially validated finite element model.
+            All numeric field values are stored in the canonical unit system.
 
     Raises:
-        ValueError: If node IDs are not unique, element IDs are not unique, an element
-            references an undefined node or material, a BC or load references an unknown
-            node, a distributed load references an unknown element, any enum string is
-            unrecognised, or any element has non-positive length.
+        ValueError: If unit_system string is not "SI" or "empirical", if any specified
+            unit string is not recognised for its quantity type, if node IDs are not
+            unique, element IDs are not unique, an element references an undefined node
+            or material, a BC or load references an unknown node, a distributed load
+            references an unknown element, any enum string is unrecognised, or any
+            element has non-positive length.
 
     Notes:
         Field-level validation (E > 0, A > 0) was already enforced by Pydantic.
-        This function handles cross-entity referential integrity only.
+        This function handles unit conversion, cross-entity referential integrity,
+        and enum resolution.
         Enum string lookup uses _ELEMENT_TYPE_MAP, _BC_TYPE_MAP, _LOAD_TYPE_MAP.
+        Unit conversion pipeline: input unit -> canonical SI -> canonical Empirical (if needed).
     """
+    # --- Unit system and converter ---
+    unit_system_str = schema.unit_system.strip()
+    try:
+        unit_system = UnitSystem(unit_system_str)
+    except ValueError:
+        raise ValueError(
+            f"Unknown unit_system '{unit_system_str}'. Expected 'SI' or 'empirical'."
+        )
+
+    # Build units_spec: start from canonical defaults, override with YAML units block.
+    units_spec: dict[str, str] = dict(CANONICAL_UNITS[unit_system])
+    units_overrides: dict[str, str | None] = {
+        "length":        schema.units.length,
+        "force":         schema.units.force,
+        "modulus":       schema.units.modulus,
+        "area":          schema.units.area,
+        "second_moment": schema.units.second_moment,
+        "distributed":   schema.units.distributed,
+        "moment":        schema.units.moment,
+    }
+    for qty, unit_str in units_overrides.items():
+        if unit_str is not None:
+            validate_unit(qty, unit_str)
+            units_spec[qty] = unit_str
+
+    conv = UnitConverter(unit_system=unit_system, units=units_spec)
+
     # --- Nodes ---
-    nodes_list: list[Node] = [Node(id=n.id, x=n.x) for n in schema.mesh.nodes]
+    nodes_list: list[Node] = [Node(id=n.id, x=conv.convert(n.x, "length")) for n in schema.mesh.nodes]
     node_ids_list = [n.id for n in nodes_list]
     if len(node_ids_list) != len(set(node_ids_list)):
         raise ValueError(f"Duplicate node IDs detected: {node_ids_list}")
@@ -289,7 +380,12 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
 
     # --- Materials ---
     materials: dict[str, MaterialProperties] = {
-        name: MaterialProperties(E=m.E, A=m.A, I=m.I, label=name)
+        name: MaterialProperties(
+            E=conv.convert(m.E, "modulus"),
+            A=conv.convert(m.A, "area"),
+            I=conv.convert(m.I, "second_moment"),
+            label=name,
+        )
         for name, m in schema.materials.items()
     }
 
@@ -334,6 +430,7 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
         bcs.append(BoundaryCondition(node_id=bc.node_id, bc_type=_BC_TYPE_MAP[bc_type_str]))
 
     # --- Nodal Loads ---
+    _MOMENT_LOAD_TYPES = {"point_moment"}
     nodal_loads: list[NodalLoad] = []
     for ld in schema.loads.nodal:
         if ld.node_id not in node_ids:
@@ -341,10 +438,11 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
         lt_str = ld.type.lower()
         if lt_str not in _LOAD_TYPE_MAP:
             raise ValueError(f"Unknown load type: '{lt_str}'")
+        qty = "moment" if lt_str in _MOMENT_LOAD_TYPES else "force"
         nodal_loads.append(NodalLoad(
             node_id=ld.node_id,
             load_type=_LOAD_TYPE_MAP[lt_str],
-            magnitude=ld.magnitude,
+            magnitude=conv.convert(ld.magnitude, qty),
         ))
 
     # --- Distributed Loads ---
@@ -358,8 +456,8 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
         dist_loads.append(DistributedLoad(
             element_id=ld.element_id,
             load_type=_LOAD_TYPE_MAP[lt_str],
-            w_i=ld.w_i,
-            w_j=ld.w_j,
+            w_i=conv.convert(ld.w_i, "distributed"),
+            w_j=conv.convert(ld.w_j, "distributed"),
         ))
 
     return FEAModel(
@@ -368,6 +466,7 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
         nodal_loads=tuple(nodal_loads),
         distributed_loads=tuple(dist_loads),
         label=label,
+        unit_system=unit_system,
     )
 
 
