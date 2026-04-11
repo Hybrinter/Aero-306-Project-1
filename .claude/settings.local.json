@@ -5,7 +5,9 @@
   "permissions": {
     "allow": [
       "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=no)",
-      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)"
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)",
+      "Read(//mnt/e/Classes/**)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_plotter.py tests/unit/test_io_yaml.py::TestLoadModelsFromYaml tests/integration/test_multi_solution.py -x --tb=short -q)"
     ]
   }
 }
