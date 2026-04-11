@@ -19,6 +19,11 @@ def configure_logging(log_dir: Path, case_label: str) -> logging.Logger:
 
     Returns:
         The 'fea_solver' logger, ready to use.
+
+    Notes:
+        Clears existing handlers on repeated calls to avoid duplicate log output.
+        File handler uses DEBUG level to capture detailed diagnostics.
+        Console handler uses WARNING level to avoid cluttering solver output.
     """
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{case_label}.log"
@@ -31,7 +36,7 @@ def configure_logging(log_dir: Path, case_label: str) -> logging.Logger:
     if logger.handlers:
         logger.handlers.clear()
 
-    # File handler — DEBUG and above
+    # File handler -- DEBUG and above
     fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(logging.Formatter(
@@ -39,7 +44,7 @@ def configure_logging(log_dir: Path, case_label: str) -> logging.Logger:
         datefmt="%Y-%m-%d %H:%M:%S",
     ))
 
-    # Console handler — WARNING and above
+    # Console handler -- WARNING and above
     ch = logging.StreamHandler()
     ch.setLevel(logging.WARNING)
     ch.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))

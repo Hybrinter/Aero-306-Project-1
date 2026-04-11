@@ -1,5 +1,6 @@
-"""Tests for matplotlib plotting functions — TDD first."""
+"""Tests for matplotlib plotting functions -- TDD first."""
 from __future__ import annotations
+from pathlib import Path
 import numpy as np
 import pytest
 import matplotlib
@@ -19,6 +20,7 @@ def make_element_result(
     x_end: float = 1.0,
     n: int = 50,
 ) -> ElementResult:
+    """Create an ElementResult with given parameters."""
     x = np.linspace(x_start, x_end, n)
     V = np.ones(n) * -1.0
     M = np.linspace(-1.0, 0.0, n)
@@ -32,19 +34,23 @@ def make_element_result(
 
 
 class TestPlotShearForceDiagram:
-    def test_returns_figure(self):
+    """Tests for plot_shear_force_diagram."""
+    def test_returns_figure(self) -> None:
+        """SFD plot returns matplotlib Figure."""
         er = [make_element_result()]
         fig = plot_shear_force_diagram(er, title="Test SFD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
-    def test_handles_multiple_elements(self):
+    def test_handles_multiple_elements(self) -> None:
+        """SFD plot handles multiple elements."""
         ers = [make_element_result(i+1, float(i), float(i+1)) for i in range(3)]
         fig = plot_shear_force_diagram(ers, title="Multi-element SFD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
-    def test_saves_to_file(self, tmp_path):
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """SFD plot saves to file correctly."""
         er = [make_element_result()]
         out = tmp_path / "sfd.png"
         fig = plot_shear_force_diagram(er, title="Save Test", output_path=out)
@@ -53,19 +59,23 @@ class TestPlotShearForceDiagram:
 
 
 class TestPlotBendingMomentDiagram:
-    def test_returns_figure(self):
+    """Tests for plot_bending_moment_diagram."""
+    def test_returns_figure(self) -> None:
+        """BMD plot returns matplotlib Figure."""
         er = [make_element_result()]
         fig = plot_bending_moment_diagram(er, title="Test BMD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
-    def test_handles_multiple_elements(self):
+    def test_handles_multiple_elements(self) -> None:
+        """BMD plot handles multiple elements."""
         ers = [make_element_result(i+1, float(i), float(i+1)) for i in range(3)]
         fig = plot_bending_moment_diagram(ers, title="Multi-element BMD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
-    def test_saves_to_file(self, tmp_path):
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """BMD plot saves to file correctly."""
         er = [make_element_result()]
         out = tmp_path / "bmd.png"
         fig = plot_bending_moment_diagram(er, title="Save Test", output_path=out)
@@ -74,7 +84,9 @@ class TestPlotBendingMomentDiagram:
 
 
 class TestPlotDeformedShape:
-    def test_returns_figure(self):
+    """Tests for plot_deformed_shape."""
+    def test_returns_figure(self) -> None:
+        """Deformed shape plot returns matplotlib Figure."""
         er = [make_element_result()]
         fig = plot_deformed_shape(er)
         assert isinstance(fig, plt.Figure)

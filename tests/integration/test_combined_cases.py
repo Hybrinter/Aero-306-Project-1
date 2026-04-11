@@ -12,7 +12,7 @@ from fea_solver.models import DOFType
 CONFIG = Path("config")
 
 
-def full_solve(yaml_path: Path):
+def full_solve(yaml_path: Path) -> tuple:
     model = load_model_from_yaml(yaml_path)
     dof_map = build_dof_map(model)
     K = assemble_global_stiffness(model, dof_map)
@@ -24,30 +24,34 @@ def full_solve(yaml_path: Path):
 
 class TestCase05CombinedBarBeam:
     """case_05_combined_bar_beam.yaml: frame element, axial + transverse loads."""
-
-    def test_model_solves_without_error(self):
+    def test_model_solves_without_error(self) -> None:
+        """Frame element with combined loads solves without error."""
         model, dof_map, result, element_results = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
         assert result.displacements is not None
         assert len(element_results) == 1
 
-    def test_axial_displacement_non_zero(self):
+    def test_axial_displacement_non_zero(self) -> None:
+        """Axial displacement is non-zero."""
         model, dof_map, result, _ = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         u_tip = result.displacements[dof_map.index(tip_node.id, DOFType.U)]
         assert abs(u_tip) > 0.0
 
-    def test_transverse_displacement_non_zero(self):
+    def test_transverse_displacement_non_zero(self) -> None:
+        """Transverse displacement is non-zero."""
         model, dof_map, result, _ = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
         v_tip = result.displacements[dof_map.index(tip_node.id, DOFType.V)]
         assert abs(v_tip) > 0.0
 
-    def test_internal_forces_non_zero(self):
+    def test_internal_forces_non_zero(self) -> None:
+        """Internal forces are non-zero."""
         _, _, _, element_results = full_solve(CONFIG / "case_05_combined_bar_beam.yaml")
         er = element_results[0]
         assert abs(er.axial_force) > 0.0
 
-    def test_axial_displacement_matches_bar_formula(self):
+    def test_axial_displacement_matches_bar_formula(self) -> None:
+        """Axial displacement matches bar formula."""
         # u_tip = P_x * L / (E * A)
         P_x = 10000.0
         L = 1.0
@@ -59,7 +63,8 @@ class TestCase05CombinedBarBeam:
         u_tip = result.displacements[dof_map.index(tip_node.id, DOFType.U)]
         assert u_tip == pytest.approx(analytical_u, rel=0.01)
 
-    def test_transverse_displacement_matches_beam_formula(self):
+    def test_transverse_displacement_matches_beam_formula(self) -> None:
+        """Transverse displacement matches beam formula."""
         # v_tip = P_y * L^3 / (3 * E * I)
         P_y = -5000.0
         L = 1.0

@@ -12,7 +12,7 @@ from fea_solver.models import DOFType
 CONFIG = Path("config")
 
 
-def full_solve(yaml_path: Path):
+def full_solve(yaml_path: Path) -> tuple:
     """Run the complete solve pipeline for a YAML config."""
     model = load_model_from_yaml(yaml_path)
     dof_map = build_dof_map(model)
@@ -24,11 +24,9 @@ def full_solve(yaml_path: Path):
 
 
 class TestCase01BarAxial:
-    """case_01_bar_axial.yaml: 3-node bar, E=200GPa, A=0.01m², P=10kN at tip.
-
-    Analytical: u_tip = PL/EA = 10000/(200e9*0.01) = 5e-6 m
-    """
-    def test_tip_displacement(self):
+    """case_01_bar_axial.yaml: 3-node bar, E=200GPa, A=0.01m^2, P=10kN at tip."""
+    def test_tip_displacement(self) -> None:
+        """Tip displacement matches analytical solution."""
         model, dof_map, result, _ = full_solve(CONFIG / "case_01_bar_axial.yaml")
         # Tip is at node 3 (x=1.0)
         tip_node = max(model.mesh.nodes, key=lambda n: n.x)
@@ -36,12 +34,14 @@ class TestCase01BarAxial:
         analytical = 10000.0 / (200.0e9 * 0.01)  # 5e-6 m
         assert u_tip == pytest.approx(analytical, rel=0.01)
 
-    def test_reaction_equals_applied_load(self):
+    def test_reaction_equals_applied_load(self) -> None:
+        """Reaction force equals applied load."""
         model, dof_map, result, _ = full_solve(CONFIG / "case_01_bar_axial.yaml")
         # Reaction at fixed node must equal -10000 N
         assert abs(result.reactions[0]) == pytest.approx(10000.0, rel=0.01)
 
-    def test_axial_forces_equal_applied_load(self):
+    def test_axial_forces_equal_applied_load(self) -> None:
+        """Internal axial forces equal applied load."""
         _, _, result, element_results = full_solve(CONFIG / "case_01_bar_axial.yaml")
         for er in element_results:
             assert abs(er.axial_force) == pytest.approx(10000.0, rel=0.01)
@@ -49,8 +49,8 @@ class TestCase01BarAxial:
 
 class TestCase07MultiMaterial:
     """case_07_multi_material.yaml: 3-segment bar, different materials."""
-
-    def test_tip_displacement_analytical(self):
+    def test_tip_displacement_analytical(self) -> None:
+        """Tip displacement matches analytical solution."""
         # u_tip = P * sum(L_i / (E_i * A_i))
         # L=1m each, E=[200e9, 70e9, 110e9], A=[0.01, 0.02, 0.015], P=50000
         P = 50000.0

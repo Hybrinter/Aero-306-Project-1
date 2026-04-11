@@ -42,17 +42,22 @@ def solve_displacements(
 
     Raises:
         np.linalg.LinAlgError: If K_ff is singular (structure is unstable).
+
+    Notes:
+        Condition number threshold of 1e14 is used to detect ill-conditioning.
+        Values above 1e14 indicate nearly singular stiffness matrix;
+        typically due to missing or improperly applied boundary conditions.
     """
     cond = float(np.linalg.cond(K_ff))
     logger.debug("K_ff condition number: %.3e", cond)
     if cond > 1e14:
-        logger.warning("K_ff is nearly singular (cond=%.3e) — check BCs", cond)
+        logger.warning("K_ff is nearly singular (cond=%.3e) -- check BCs", cond)
 
     try:
         u_f = np.linalg.solve(K_ff, F_f)
     except np.linalg.LinAlgError as exc:
         raise np.linalg.LinAlgError(
-            f"Stiffness matrix is singular — check boundary conditions. "
+            f"Stiffness matrix is singular -- check boundary conditions. "
             f"Original error: {exc}"
         ) from exc
 
@@ -75,8 +80,15 @@ def compute_reactions(
 
     R = K[constrained, :] @ u - F[constrained]
 
+    Args:
+        K (NDArray[np.float64]): Full global stiffness matrix of shape (n_dofs, n_dofs).
+        u (NDArray[np.float64]): Full displacement vector of shape (n_dofs,).
+        F (NDArray[np.float64]): Full global force vector of shape (n_dofs,).
+        constrained_dofs (list[int]): Global indices of constrained DOFs.
+
     Returns:
-        Reaction vector of shape (n_constrained,), same order as constrained_dofs.
+        NDArray[np.float64]: Reaction vector of shape (n_constrained,),
+            same order as constrained_dofs.
     """
     R = K[constrained_dofs, :] @ u - F[constrained_dofs]
     logger.debug("Reactions: %s", R)
@@ -107,6 +119,11 @@ def run_solve_pipeline(
 
     Returns:
         SolutionResult with displacements, reactions, dof_map, and model.
+
+    Notes:
+        Pipeline applies constraint reduction method: partition K and F into
+        free (f) and constrained (c) DOFs, solve the reduced system K_ff*u_f = F_f,
+        then recover reactions using full stiffness and all DOFs.
     """
     constrained = get_constrained_dof_indices(model, dof_map)
     free = get_free_dof_indices(model, dof_map)

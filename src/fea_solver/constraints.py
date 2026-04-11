@@ -38,8 +38,17 @@ _BC_TO_DOF_TYPES: dict[BoundaryConditionType, tuple[DOFType, ...]] = {
 def get_constrained_dof_indices(model: FEAModel, dof_map: DOFMap) -> list[int]:
     """Return sorted list of global DOF indices that are kinematically constrained.
 
-    Only constrains DOF types that actually exist at the node (e.g. a PIN on
-    a BEAM node only constrains V, not U, because BEAM nodes have no U DOF).
+    Args:
+        model (FEAModel): FEA problem containing boundary conditions.
+        dof_map (DOFMap): DOF mapping with (node_id, DOFType) to global index.
+
+    Returns:
+        list[int]: Sorted list of global DOF indices that are constrained by BCs.
+
+    Notes:
+        Only constrains DOF types that actually exist at the node. For example,
+        a PIN on a BEAM node constrains only V (not U), because BEAM nodes have
+        no U DOF. Result is logged at debug level.
     """
     constrained: set[int] = set()
     for bc in model.boundary_conditions:
@@ -53,7 +62,19 @@ def get_constrained_dof_indices(model: FEAModel, dof_map: DOFMap) -> list[int]:
 
 
 def get_free_dof_indices(model: FEAModel, dof_map: DOFMap) -> list[int]:
-    """Return sorted list of global DOF indices that are free (unconstrained)."""
+    """Return sorted list of global DOF indices that are free (unconstrained).
+
+    Args:
+        model (FEAModel): FEA problem containing boundary conditions.
+        dof_map (DOFMap): DOF mapping with (node_id, DOFType) to global index.
+
+    Returns:
+        list[int]: Sorted list of global DOF indices not constrained by any BC.
+
+    Notes:
+        Computed as the complement of constrained DOF indices. Result is
+        logged at debug level.
+    """
     constrained = set(get_constrained_dof_indices(model, dof_map))
     free = sorted(i for i in range(dof_map.total_dofs) if i not in constrained)
     logger.debug("Free DOFs: %s", free)
@@ -65,19 +86,24 @@ def apply_constraints_reduction(
     F: NDArray[np.float64],
     constrained_dofs: list[int],
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Apply BCs via reduction/elimination method.
+    """Apply kinematic boundary conditions via the reduction/elimination method.
 
     Partitions the system into free (f) and constrained (c) sub-sets.
     For homogeneous BCs (u_c = 0), the reduced system is:
         K_ff * u_f = F_f
 
     Args:
-        K: Global stiffness matrix (n x n).
-        F: Global force vector (n,).
-        constrained_dofs: Sorted list of constrained DOF global indices.
+        K (NDArray[np.float64]): Global stiffness matrix, shape (n, n).
+        F (NDArray[np.float64]): Global force vector, shape (n,).
+        constrained_dofs (list[int]): Sorted list of constrained DOF global indices.
 
     Returns:
-        (K_ff, F_f): Reduced stiffness matrix and force vector for free DOFs.
+        tuple[NDArray[np.float64], NDArray[np.float64]]: Pair (K_ff, F_f) containing
+            the reduced stiffness matrix and reduced force vector for free DOFs only.
+
+    Notes:
+        Exact method without penalty coefficients. Assumes homogeneous BCs (u_c = 0).
+        Result is logged at debug level showing counts of free/constrained DOFs.
     """
     n = K.shape[0]
     all_dofs = list(range(n))

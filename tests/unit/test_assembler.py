@@ -1,4 +1,4 @@
-"""Tests for DOF map construction and global matrix assembly — TDD first."""
+"""Tests for DOF map construction and global matrix assembly -- TDD first."""
 from __future__ import annotations
 import numpy as np
 import pytest
@@ -12,6 +12,7 @@ from fea_solver.assembler import (
 )
 
 def make_bar_model(n_nodes: int = 2) -> FEAModel:
+    """Create a bar model with n_nodes nodes."""
     mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
     nodes = tuple(Node(id=i+1, x=float(i)) for i in range(n_nodes))
     elements = tuple(
@@ -26,6 +27,7 @@ def make_bar_model(n_nodes: int = 2) -> FEAModel:
                     distributed_loads=(), label=f"bar_{n_nodes}_nodes")
 
 def make_beam_model(n_nodes: int = 2) -> FEAModel:
+    """Create a beam model with n_nodes nodes."""
     mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
     nodes = tuple(Node(id=i+1, x=float(i)) for i in range(n_nodes))
     elements = tuple(
@@ -41,41 +43,49 @@ def make_beam_model(n_nodes: int = 2) -> FEAModel:
 
 
 class TestBuildDofMap:
-    def test_bar_two_nodes_gives_two_dofs(self):
+    """Tests for build_dof_map DOF count and ordering."""
+    def test_bar_two_nodes_gives_two_dofs(self) -> None:
+        """Two-node bar model has exactly 2 total DOFs."""
         model = make_bar_model(2)
         dof_map = build_dof_map(model)
         assert dof_map.total_dofs == 2
 
-    def test_bar_three_nodes_gives_three_dofs(self):
+    def test_bar_three_nodes_gives_three_dofs(self) -> None:
+        """Three-node bar model has exactly 3 total DOFs."""
         model = make_bar_model(3)
         dof_map = build_dof_map(model)
         assert dof_map.total_dofs == 3
 
-    def test_beam_two_nodes_gives_four_dofs(self):
+    def test_beam_two_nodes_gives_four_dofs(self) -> None:
+        """Two-node beam model has exactly 4 total DOFs."""
         model = make_beam_model(2)
         dof_map = build_dof_map(model)
         assert dof_map.total_dofs == 4
 
-    def test_bar_dof_types_are_u_only(self):
+    def test_bar_dof_types_are_u_only(self) -> None:
+        """Bar DOF types are U only, no V or THETA."""
         model = make_bar_model(2)
         dof_map = build_dof_map(model)
         assert dof_map.has_dof(1, DOFType.U)
         assert not dof_map.has_dof(1, DOFType.V)
         assert not dof_map.has_dof(1, DOFType.THETA)
 
-    def test_beam_dof_types_are_v_and_theta(self):
+    def test_beam_dof_types_are_v_and_theta(self) -> None:
+        """Beam DOF types are V and THETA, no U."""
         model = make_beam_model(2)
         dof_map = build_dof_map(model)
         assert not dof_map.has_dof(1, DOFType.U)
         assert dof_map.has_dof(1, DOFType.V)
         assert dof_map.has_dof(1, DOFType.THETA)
 
-    def test_dof_indices_start_at_zero(self):
+    def test_dof_indices_start_at_zero(self) -> None:
+        """DOF indices start at zero."""
         model = make_bar_model(2)
         dof_map = build_dof_map(model)
         assert dof_map.index(1, DOFType.U) == 0
 
-    def test_dof_indices_are_contiguous(self):
+    def test_dof_indices_are_contiguous(self) -> None:
+        """DOF indices are contiguous from 0 to total_dofs-1."""
         model = make_bar_model(3)
         dof_map = build_dof_map(model)
         indices = sorted(dof_map.mapping.values())
@@ -83,19 +93,23 @@ class TestBuildDofMap:
 
 
 class TestGetElementDofIndices:
-    def test_bar_returns_two_indices(self):
+    """Tests for get_element_dof_indices DOF index retrieval."""
+    def test_bar_returns_two_indices(self) -> None:
+        """Bar element returns 2 DOF indices."""
         model = make_bar_model(2)
         dof_map = build_dof_map(model)
         idx = get_element_dof_indices(1, model, dof_map)
         assert len(idx) == 2
 
-    def test_beam_returns_four_indices(self):
+    def test_beam_returns_four_indices(self) -> None:
+        """Beam element returns 4 DOF indices."""
         model = make_beam_model(2)
         dof_map = build_dof_map(model)
         idx = get_element_dof_indices(1, model, dof_map)
         assert len(idx) == 4
 
-    def test_two_bar_elements_share_middle_node_dof(self):
+    def test_two_bar_elements_share_middle_node_dof(self) -> None:
+        """Two bar elements share the middle node DOF."""
         model = make_bar_model(3)
         dof_map = build_dof_map(model)
         idx1 = get_element_dof_indices(1, model, dof_map)
@@ -105,20 +119,24 @@ class TestGetElementDofIndices:
 
 
 class TestAssembleGlobalStiffness:
-    def test_shape_matches_total_dofs(self):
+    """Tests for assemble_global_stiffness matrix assembly."""
+    def test_shape_matches_total_dofs(self) -> None:
+        """Global stiffness matrix shape matches total DOFs."""
         model = make_bar_model(3)
         dof_map = build_dof_map(model)
         K = assemble_global_stiffness(model, dof_map)
         n = dof_map.total_dofs
         assert K.shape == (n, n)
 
-    def test_symmetry(self):
+    def test_symmetry(self) -> None:
+        """Global stiffness matrix is symmetric."""
         model = make_bar_model(3)
         dof_map = build_dof_map(model)
         K = assemble_global_stiffness(model, dof_map)
         np.testing.assert_allclose(K, K.T, atol=1e-12)
 
-    def test_two_bar_element_known_K(self):
+    def test_two_bar_element_known_K(self) -> None:
+        """Two-bar assembly produces known stiffness matrix."""
         # 3-node bar, each element EA/L=1
         # Global K should be [[1,-1,0],[-1,2,-1],[0,-1,1]]
         model = make_bar_model(3)
@@ -127,7 +145,8 @@ class TestAssembleGlobalStiffness:
         expected = np.array([[1,-1,0],[-1,2,-1],[0,-1,1]], dtype=float)
         np.testing.assert_allclose(K, expected, atol=1e-12)
 
-    def test_beam_global_K_shape_4x4(self):
+    def test_beam_global_K_shape_4x4(self) -> None:
+        """Two-node beam assembly produces 4x4 stiffness matrix."""
         model = make_beam_model(2)
         dof_map = build_dof_map(model)
         K = assemble_global_stiffness(model, dof_map)
@@ -135,20 +154,24 @@ class TestAssembleGlobalStiffness:
 
 
 class TestAssembleGlobalForceVector:
-    def test_shape_matches_total_dofs(self):
+    """Tests for assemble_global_force_vector assembly."""
+    def test_shape_matches_total_dofs(self) -> None:
+        """Global force vector shape matches total DOFs."""
         model = make_bar_model(2)
         dof_map = build_dof_map(model)
         F = assemble_global_force_vector(model, dof_map)
         assert F.shape == (dof_map.total_dofs,)
 
-    def test_nodal_load_placed_correctly(self):
+    def test_nodal_load_placed_correctly(self) -> None:
+        """Nodal load is placed at correct global DOF index."""
         # Bar model: P=1 at node 2 (global DOF index 1)
         model = make_bar_model(2)
         dof_map = build_dof_map(model)
         F = assemble_global_force_vector(model, dof_map)
         assert F[dof_map.index(2, DOFType.U)] == pytest.approx(1.0)
 
-    def test_no_loads_gives_zero_vector(self):
+    def test_no_loads_gives_zero_vector(self) -> None:
+        """Model with no loads produces zero force vector."""
         mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
         n1, n2 = Node(1, 0.0), Node(2, 1.0)
         elem = Element(id=1, node_i=n1, node_j=n2,
@@ -162,7 +185,8 @@ class TestAssembleGlobalForceVector:
         F = assemble_global_force_vector(model, dof_map)
         np.testing.assert_allclose(F, np.zeros(dof_map.total_dofs))
 
-    def test_distributed_load_adds_to_force_vector(self):
+    def test_distributed_load_adds_to_force_vector(self) -> None:
+        """Distributed load produces non-zero force vector."""
         # Beam with UDL: consistent nodal forces must be non-zero
         mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
         n1, n2 = Node(1, 0.0), Node(2, 1.0)

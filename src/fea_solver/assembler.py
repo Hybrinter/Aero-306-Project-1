@@ -4,7 +4,7 @@ Conventions:
   - DOF ordering within build_dof_map: nodes sorted by id,
     within each node DOFs in canonical order (U, V, THETA),
     only those applicable to the element types present at that node.
-  - This ordering is FROZEN — all downstream modules depend on it.
+  - This ordering is FROZEN -- all downstream modules depend on it.
 """
 from __future__ import annotations
 
@@ -43,6 +43,17 @@ def _dofs_for_node(node_id: int, model: FEAModel) -> tuple[DOFType, ...]:
 
     A node inherits the union of DOF types from all elements connected to it,
     in canonical order (U before V before THETA).
+
+    Args:
+        node_id (int): Identifier of the node.
+        model (FEAModel): FEA problem with mesh and elements.
+
+    Returns:
+        tuple[DOFType, ...]: Tuple of DOF types present at the node,
+            in canonical order (U, V, THETA).
+
+    Notes:
+        Only DOF types corresponding to connected element types are included.
     """
     dof_set: set[DOFType] = set()
     for element in model.mesh.elements:
@@ -60,6 +71,17 @@ def build_dof_map(model: FEAModel) -> DOFMap:
     Nodes processed in ascending id order.
     Within each node, DOFs assigned in canonical order: U, V, THETA.
     Only DOFs applicable to the element types present at that node.
+
+    Args:
+        model (FEAModel): Fully constructed FEA problem with mesh, BCs, and loads.
+
+    Returns:
+        DOFMap: Mapping of (node_id, DOFType) pairs to contiguous global indices.
+            Total DOF count stored in DOFMap.total_dofs.
+
+    Notes:
+        DOF ordering: nodes sorted by id ascending, then U -> V -> THETA within each node.
+        Only DOF types relevant to the element type present on each node are assigned.
     """
     dof_map = DOFMap()
     idx = 0
@@ -82,6 +104,17 @@ def get_element_dof_indices(
       BAR:   [u_i, u_j]
       BEAM:  [v_i, theta_i, v_j, theta_j]
       FRAME: [u_i, v_i, theta_i, u_j, v_j, theta_j]
+
+    Args:
+        element_id (int): Identifier of the element.
+        model (FEAModel): FEA problem containing the mesh.
+        dof_map (DOFMap): Global DOF index mapping.
+
+    Returns:
+        list[int]: Ordered list of global DOF indices for the element nodes.
+
+    Notes:
+        Indices follow canonical element DOF ordering for element type.
     """
     element = next(e for e in model.mesh.elements if e.id == element_id)
     dof_types = _ELEMENT_DOFS[element.element_type]
@@ -99,6 +132,17 @@ def assemble_global_stiffness(
 
     For each element, computes the local stiffness matrix and scatters
     it into K using the element DOF indices.
+
+    Args:
+        model (FEAModel): FEA problem with mesh and material properties.
+        dof_map (DOFMap): Global DOF index mapping.
+
+    Returns:
+        NDArray[np.float64]: Global stiffness matrix K of shape (n_dofs, n_dofs).
+
+    Notes:
+        Uses element_stiffness_matrix() for each element type to compute local k,
+        then assembles via direct stiffness method into global matrix.
     """
     n = dof_map.total_dofs
     K = np.zeros((n, n))
@@ -122,6 +166,18 @@ def assemble_global_force_vector(
     Applies:
       1. Nodal (concentrated) loads directly.
       2. Distributed loads converted to consistent nodal forces.
+
+    Args:
+        model (FEAModel): FEA problem with nodal and distributed loads.
+        dof_map (DOFMap): Global DOF index mapping.
+
+    Returns:
+        NDArray[np.float64]: Global force vector F of shape (n_dofs,).
+
+    Notes:
+        Nodal loads are applied to appropriate DOFs based on load type.
+        Distributed loads are converted to consistent element nodal forces via
+        element_load_vector() and assembled into global vector.
     """
     n = dof_map.total_dofs
     F = np.zeros(n)

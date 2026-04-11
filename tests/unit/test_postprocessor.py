@@ -1,4 +1,4 @@
-"""Tests for element post-processing (internal forces) — TDD first."""
+"""Tests for element post-processing (internal forces) -- TDD first."""
 from __future__ import annotations
 import numpy as np
 import pytest
@@ -16,7 +16,7 @@ from fea_solver.postprocessor import (
 )
 
 
-def solve_cantilever_beam(L: float = 1.0, EI: float = 1.0, P: float = -1.0):
+def solve_cantilever_beam(L: float = 1.0, EI: float = 1.0, P: float = -1.0) -> tuple:
     """Helper: single-element cantilever beam, fixed at node 1, tip load P at node 2."""
     mat = MaterialProperties(E=EI, A=1.0, I=1.0)
     n1, n2 = Node(1, 0.0), Node(2, L)
@@ -33,7 +33,7 @@ def solve_cantilever_beam(L: float = 1.0, EI: float = 1.0, P: float = -1.0):
     return model, dof_map, result
 
 
-def solve_bar(L: float = 1.0, EA: float = 1.0, P: float = 1.0):
+def solve_bar(L: float = 1.0, EA: float = 1.0, P: float = 1.0) -> tuple:
     """Helper: single bar, fixed at node 1, axial load P at node 2."""
     mat = MaterialProperties(E=EA, A=1.0, I=0.0)
     n1, n2 = Node(1, 0.0), Node(2, L)
@@ -51,13 +51,16 @@ def solve_bar(L: float = 1.0, EA: float = 1.0, P: float = 1.0):
 
 
 class TestComputeElementAxialForce:
-    def test_bar_unit_force(self):
+    """Tests for compute_element_axial_force."""
+    def test_bar_unit_force(self) -> None:
+        """Bar with unit load gives unit axial force."""
         # E=1, A=1, L=1, P=1 -> u_tip = 1 -> N = EA/L*(u_j - u_i) = 1
         model, dof_map, result = solve_bar(L=1.0, EA=1.0, P=1.0)
         N = compute_element_axial_force(1, model, dof_map, result.displacements)
         assert N == pytest.approx(1.0)
 
-    def test_bar_scaled_force(self):
+    def test_bar_scaled_force(self) -> None:
+        """Bar with scaled load gives correct axial force."""
         # E=200e9, A=0.01, L=1, P=10000 -> u_tip = P/(EA) = 10000/(2e9) = 5e-6
         # N = EA/L*(u_j - u_i) = 2e9 * 5e-6 = 10000
         model, dof_map, result = solve_bar(L=1.0, EA=200.0e9*0.01, P=10000.0)
@@ -66,18 +69,22 @@ class TestComputeElementAxialForce:
 
 
 class TestComputeBeamInternalForces:
-    def test_returns_three_arrays_of_same_length(self):
+    """Tests for compute_beam_internal_forces."""
+    def test_returns_three_arrays_of_same_length(self) -> None:
+        """Beam internal forces returns three arrays of same length."""
         model, dof_map, result = solve_cantilever_beam()
         x, V, M = compute_beam_internal_forces(1, model, dof_map, result.displacements, n_stations=20)
         assert x.shape == V.shape == M.shape == (20,)
 
-    def test_x_stations_span_element(self):
+    def test_x_stations_span_element(self) -> None:
+        """X stations span the entire element."""
         model, dof_map, result = solve_cantilever_beam(L=2.0)
         x, V, M = compute_beam_internal_forces(1, model, dof_map, result.displacements, n_stations=50)
         assert x[0] == pytest.approx(0.0)
         assert x[-1] == pytest.approx(2.0)
 
-    def test_cantilever_shear_is_constant(self):
+    def test_cantilever_shear_is_constant(self) -> None:
+        """Cantilever shear force is constant."""
         # Cantilever with tip load P=-1: V = P = -1 everywhere (from equilibrium)
         # In our sign convention for beam FEA: shear should be constant magnitude
         model, dof_map, result = solve_cantilever_beam(L=1.0, EI=1.0, P=-1.0)
@@ -85,7 +92,8 @@ class TestComputeBeamInternalForces:
         # Shear should be approximately constant (within numerical precision)
         assert np.std(V) == pytest.approx(0.0, abs=1e-8)
 
-    def test_cantilever_moment_at_fixed_end(self):
+    def test_cantilever_moment_at_fixed_end(self) -> None:
+        """Cantilever moment at fixed end matches formula."""
         # Cantilever L=1, P=-1 at tip: M(x=0) = P*L = -1*1 = -1 (hogging = negative moment)
         # M(x) = P*(L-x) in beam convention
         model, dof_map, result = solve_cantilever_beam(L=1.0, EI=1.0, P=-1.0)
@@ -93,13 +101,15 @@ class TestComputeBeamInternalForces:
         # At x=0 (fixed end), M should equal P*L = -1
         assert abs(M[0]) == pytest.approx(1.0, rel=0.01)
 
-    def test_cantilever_moment_at_free_end_is_zero(self):
+    def test_cantilever_moment_at_free_end_is_zero(self) -> None:
+        """Cantilever moment at free end is zero."""
         # M(x=L) = 0 for cantilever with tip load (no applied moment)
         model, dof_map, result = solve_cantilever_beam(L=1.0, EI=1.0, P=-1.0)
         x, V, M = compute_beam_internal_forces(1, model, dof_map, result.displacements, n_stations=100)
         assert M[-1] == pytest.approx(0.0, abs=1e-8)
 
-    def test_x_stations_are_global_coordinates(self):
+    def test_x_stations_are_global_coordinates(self) -> None:
+        """X stations use global coordinates."""
         # For element from x=2.0 to x=3.0, x_stations should start at 2.0
         mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
         n1, n2 = Node(1, 2.0), Node(2, 3.0)
@@ -119,19 +129,23 @@ class TestComputeBeamInternalForces:
 
 
 class TestPostprocessAllElements:
-    def test_returns_list_of_element_results(self):
+    """Tests for postprocess_all_elements."""
+    def test_returns_list_of_element_results(self) -> None:
+        """postprocess_all_elements returns list of ElementResults."""
         from fea_solver.models import ElementResult
         model, dof_map, result = solve_cantilever_beam()
         element_results = postprocess_all_elements(model, result)
         assert len(element_results) == 1
         assert isinstance(element_results[0], ElementResult)
 
-    def test_result_element_id_matches(self):
+    def test_result_element_id_matches(self) -> None:
+        """Element result ID matches element ID."""
         model, dof_map, result = solve_cantilever_beam()
         element_results = postprocess_all_elements(model, result)
         assert element_results[0].element_id == 1
 
-    def test_bar_axial_force_in_result(self):
+    def test_bar_axial_force_in_result(self) -> None:
+        """Bar axial force is present in result."""
         model, dof_map, result = solve_bar(L=1.0, EA=1.0, P=5.0)
         element_results = postprocess_all_elements(model, result)
         assert element_results[0].axial_force == pytest.approx(5.0)

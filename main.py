@@ -1,4 +1,4 @@
-"""AERO 306 FEA Solver — CLI entrypoint.
+"""AERO 306 FEA Solver -- CLI entrypoint.
 
 Usage:
     uv run python main.py config/case_02_cantilever_beam.yaml
@@ -8,18 +8,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
-
-# Ensure UTF-8 output on Windows so rich can render unicode characters (e.g. θ).
-os.environ.setdefault("PYTHONUTF8", "1")
-if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-    except AttributeError:
-        pass  # Python < 3.7 fallback (not expected here)
 
 import matplotlib
 matplotlib.use("Agg")  # non-interactive backend; safe for CLI and CI
@@ -49,6 +39,22 @@ from fea_solver.solver import run_solve_pipeline
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments for the FEA solver CLI.
+
+    Args:
+        argv (list[str] | None): Argument list to parse. Uses sys.argv[1:] if None.
+
+    Returns:
+        argparse.Namespace: Parsed arguments with fields:
+            config (str): Path to YAML case file.
+            no_plot (bool): Suppress all plot windows if True.
+            save_plots (str | None): Directory to save plot images, or None.
+            n_stations (int): Number of evaluation points per element for post-processing.
+            log_dir (Path): Directory for log files.
+
+    Notes:
+        Default n_stations is 100.
+    """
     parser = argparse.ArgumentParser(
         description="AERO 306 1D FEA Bar/Beam Solver",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -74,6 +80,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the FEA solver pipeline: load config, assemble, solve, post-process, report, plot.
+
+    Args:
+        argv (list[str] | None): Command-line arguments. Uses sys.argv[1:] if None.
+
+    Returns:
+        int: Exit code (0 for success, 1 for file error, 2 for solve error).
+
+    Notes:
+        Prints DOF table, nodal results, reactions, and element forces to console.
+        Generates optional plots (SFD, BMD, deformed shape) if not suppressed.
+        All output logged to file and console with configurable levels.
+    """
     args = parse_args(argv)
 
     # --- Load model ---
@@ -104,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         result = run_solve_pipeline(model, dof_map, K, F)
     except Exception as e:
         logger.error("Solve failed: %s", e)
-        print(f"ERROR: Solve failed — {e}", file=sys.stderr)
+        print(f"ERROR: Solve failed -- {e}", file=sys.stderr)
         return 2
 
     # --- Post-process ---
@@ -127,13 +146,13 @@ def main(argv: list[str] | None = None) -> int:
 
         sfd_path = (save_dir / f"{model.label}_sfd.png") if save_dir else None
         figures.append(
-            plot_shear_force_diagram(element_results, title=f"SFD — {model.label}",
+            plot_shear_force_diagram(element_results, title=f"SFD -- {model.label}",
                                      output_path=sfd_path)
         )
 
         bmd_path = (save_dir / f"{model.label}_bmd.png") if save_dir else None
         figures.append(
-            plot_bending_moment_diagram(element_results, title=f"BMD — {model.label}",
+            plot_bending_moment_diagram(element_results, title=f"BMD -- {model.label}",
                                         output_path=bmd_path)
         )
 

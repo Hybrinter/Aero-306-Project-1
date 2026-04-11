@@ -27,7 +27,7 @@ from fea_solver.models import (
 
 @pytest.fixture
 def steel() -> MaterialProperties:
-    """Standard steel: E=200 GPa, A=0.01 m², I=1e-4 m⁴."""
+    """Standard steel: E=200 GPa, A=0.01 m^2, I=1e-4 m^4."""
     return MaterialProperties(E=200.0e9, A=0.01, I=1.0e-4, label="steel")
 
 

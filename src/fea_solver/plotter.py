@@ -21,7 +21,19 @@ logger = logging.getLogger(__name__)
 def _concatenate_diagrams(
     element_results: list[ElementResult],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Concatenate x, V, M arrays across all elements in order of x."""
+    """Concatenate x, V, M arrays across all elements in order of x.
+
+    Args:
+        element_results (list[ElementResult]): List of post-processed element results.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, np.ndarray]: Three arrays (x, V, M) concatenated
+            across all elements sorted by x_stations[0].
+
+    Notes:
+        Elements are sorted by their first x_station to ensure spatial order.
+        Suitable for plotting continuous diagrams across the entire structure.
+    """
     sorted_results = sorted(element_results, key=lambda er: er.x_stations[0])
     x = np.concatenate([er.x_stations for er in sorted_results])
     V = np.concatenate([er.shear_forces for er in sorted_results])
@@ -46,6 +58,10 @@ def plot_shear_force_diagram(
 
     Returns:
         The matplotlib Figure.
+
+    Notes:
+        Annotates maximum and minimum shear values on the plot.
+        If output_path is provided, saves figure as PNG at 150 dpi.
     """
     x, V, _ = _concatenate_diagrams(element_results)
 
@@ -96,6 +112,11 @@ def plot_bending_moment_diagram(
 
     Returns:
         The matplotlib Figure.
+
+    Notes:
+        Annotates maximum and minimum moment values on the plot.
+        Sagging (positive) moments shown in green; hogging (negative) in orange.
+        If output_path is provided, saves figure as PNG at 150 dpi.
     """
     x, _, M = _concatenate_diagrams(element_results)
 
@@ -117,7 +138,7 @@ def plot_bending_moment_diagram(
         ax.invert_yaxis()
 
     ax.set_xlabel("x [m]")
-    ax.set_ylabel("M [N·m]")
+    ax.set_ylabel("M [N*m]")
     ax.set_title(title)
     ax.legend(loc="best", fontsize=8)
     ax.grid(True, alpha=0.3)
@@ -138,7 +159,7 @@ def plot_deformed_shape(
     """Plot exaggerated deformed shape overlaid on undeformed geometry.
 
     Uses x_stations as horizontal position; bending_moments column is unused.
-    The shear_forces are also unused here — the deformed shape is reconstructed
+    The shear_forces are also unused here -- the deformed shape is reconstructed
     from x_stations (which are the displaced x positions at the integration stations
     - approximated as the undeformed x for 1D beam).
 
@@ -153,6 +174,10 @@ def plot_deformed_shape(
 
     Returns:
         The matplotlib Figure.
+
+    Notes:
+        Deformed shape is normalized and scaled for visualization.
+        If output_path is provided, saves figure as PNG at 150 dpi.
     """
     x, _, M = _concatenate_diagrams(element_results)
 
@@ -177,5 +202,16 @@ def plot_deformed_shape(
 
 
 def show_all_plots(figures: list[plt.Figure]) -> None:
-    """Display all figures. Call plt.show() once after all figures are ready."""
+    """Display all figures. Call plt.show() once after all figures are ready.
+
+    Args:
+        figures (list[plt.Figure]): List of matplotlib Figure objects to display.
+
+    Returns:
+        None
+
+    Notes:
+        Blocks execution until all plot windows are closed.
+        Only use when not saving plots to disk.
+    """
     plt.show()

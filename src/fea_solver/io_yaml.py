@@ -1,4 +1,4 @@
-"""YAML input file parser — converts config files into FEAModel instances.
+"""YAML input file parser -- converts config files into FEAModel instances.
 
 Expected YAML schema:
   label: str
@@ -37,7 +37,7 @@ from fea_solver.models import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# String → Enum mappings
+# String -> Enum mappings
 # ---------------------------------------------------------------------------
 
 _ELEMENT_TYPE_MAP: dict[str, ElementType] = {
@@ -70,6 +70,19 @@ _LOAD_TYPE_MAP: dict[str, LoadType] = {
 
 
 def _parse_nodes(raw: list[dict[str, Any]]) -> tuple[Node, ...]:
+    """Parse a list of raw YAML node dicts into a tuple of Node objects.
+
+    Args:
+        raw (list[dict[str, Any]]): Raw list from YAML 'nodes' key.
+            Each dict must have keys: id (int), x (float).
+
+    Returns:
+        tuple[Node, ...]: Immutable ordered tuple of Node objects.
+
+    Notes:
+        Raises ValueError if any node has a duplicate id.
+        Node ids need not be contiguous but must be unique and positive.
+    """
     nodes = tuple(Node(id=int(n["id"]), x=float(n["x"])) for n in raw)
     ids = [n.id for n in nodes]
     if len(ids) != len(set(ids)):
@@ -82,6 +95,21 @@ def _parse_elements(
     nodes_by_id: dict[int, Node],
     materials_by_name: dict[str, MaterialProperties],
 ) -> tuple[Element, ...]:
+    """Parse a list of raw YAML element dicts into a tuple of Element objects.
+
+    Args:
+        raw (list[dict[str, Any]]): Raw list from YAML 'elements' key.
+            Each dict must have keys: id, node_i, node_j, type, material.
+        nodes_by_id (dict[int, Node]): Map of node id to Node object.
+        materials_by_name (dict[str, MaterialProperties]): Map of material name to properties.
+
+    Returns:
+        tuple[Element, ...]: Immutable ordered tuple of Element objects.
+
+    Notes:
+        Raises ValueError if element references undefined nodes or materials,
+        or if element type is unknown, or if element length is non-positive.
+    """
     elements: list[Element] = []
     for e in raw:
         eid = int(e["id"])
@@ -113,6 +141,19 @@ def _parse_elements(
 
 
 def _parse_materials(raw: dict[str, dict[str, Any]]) -> dict[str, MaterialProperties]:
+    """Parse a YAML materials dictionary into MaterialProperties objects.
+
+    Args:
+        raw (dict[str, dict[str, Any]]): Raw materials dict from YAML 'materials' key.
+            Each material dict must have keys: E (float), A (float), I (float, optional).
+
+    Returns:
+        dict[str, MaterialProperties]: Map of material name to MaterialProperties object.
+
+    Notes:
+        I defaults to 0.0 if not provided.
+        Raises ValueError if E or A is non-positive.
+    """
     result: dict[str, MaterialProperties] = {}
     for name, props in raw.items():
         E = float(props["E"])
@@ -130,6 +171,19 @@ def _parse_boundary_conditions(
     raw: list[dict[str, Any]],
     node_ids: set[int],
 ) -> tuple[BoundaryCondition, ...]:
+    """Parse a list of raw YAML boundary condition dicts.
+
+    Args:
+        raw (list[dict[str, Any]]): Raw list from YAML 'boundary_conditions' key.
+            Each dict must have keys: node_id (int), type (str).
+        node_ids (set[int]): Set of valid node ids.
+
+    Returns:
+        tuple[BoundaryCondition, ...]: Immutable ordered tuple of BoundaryCondition objects.
+
+    Notes:
+        Raises ValueError if node_id is not in node_ids or if type is unknown.
+    """
     bcs: list[BoundaryCondition] = []
     for bc in raw:
         nid = int(bc["node_id"])
@@ -146,6 +200,19 @@ def _parse_nodal_loads(
     raw: list[dict[str, Any]],
     node_ids: set[int],
 ) -> tuple[NodalLoad, ...]:
+    """Parse a list of raw YAML nodal load dicts.
+
+    Args:
+        raw (list[dict[str, Any]]): Raw list from YAML 'loads.nodal' key.
+            Each dict must have keys: node_id (int), type (str), magnitude (float).
+        node_ids (set[int]): Set of valid node ids.
+
+    Returns:
+        tuple[NodalLoad, ...]: Immutable ordered tuple of NodalLoad objects.
+
+    Notes:
+        Raises ValueError if node_id is not in node_ids or if type is unknown.
+    """
     loads: list[NodalLoad] = []
     for ld in raw:
         nid = int(ld["node_id"])
@@ -166,6 +233,19 @@ def _parse_distributed_loads(
     raw: list[dict[str, Any]],
     element_ids: set[int],
 ) -> tuple[DistributedLoad, ...]:
+    """Parse a list of raw YAML distributed load dicts.
+
+    Args:
+        raw (list[dict[str, Any]]): Raw list from YAML 'loads.distributed' key.
+            Each dict must have keys: element_id (int), type (str), w_i (float), w_j (float).
+        element_ids (set[int]): Set of valid element ids.
+
+    Returns:
+        tuple[DistributedLoad, ...]: Immutable ordered tuple of DistributedLoad objects.
+
+    Notes:
+        Raises ValueError if element_id is not in element_ids or if type is unknown.
+    """
     loads: list[DistributedLoad] = []
     for ld in raw:
         eid = int(ld["element_id"])
@@ -191,9 +271,20 @@ def _parse_distributed_loads(
 def load_model_from_yaml(path: Path) -> FEAModel:
     """Parse a YAML config file into a validated FEAModel.
 
+    Args:
+        path (Path): Filesystem path to YAML case definition file.
+
+    Returns:
+        FEAModel: Fully parsed and validated finite element model.
+
     Raises:
         FileNotFoundError: If path does not exist.
-        ValueError: If the config is structurally invalid.
+        ValueError: If the config is structurally invalid (duplicate IDs, missing references, etc.).
+
+    Notes:
+        Expected YAML schema includes: label, mesh (nodes, elements), materials,
+        boundary_conditions, and loads (nodal, distributed).
+        All parsed nodes, elements, BCs, and loads are validated for consistency.
     """
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
