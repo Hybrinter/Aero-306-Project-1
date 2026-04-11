@@ -20,6 +20,8 @@ Provides:
   - show_all_plots:                 plt.show() wrapper
 
 _SERIES_COLORS:         List of hex color strings cycled across multiple series.
+_SERIES_LINESTYLES:     List of line style strings cycled across multiple series
+                        (solid, dashed, dash-dot, dotted) for greyscale legibility.
 _concatenate_diagrams:  Sorts and concatenates x, V, M, v, u, theta across elements.
 _unit_labels:           Returns UNIT_LABELS dict for the model's unit system.
 _plot_extremes:         Adds max/min markers with legend entries to an Axes.
@@ -47,6 +49,10 @@ _SERIES_COLORS: list[str] = [
     "#9467bd",  # purple
     "#8c564b",  # brown
 ]
+
+# Line styles cycled across successive series so that solutions remain distinguishable
+# in greyscale or when printed without color. First series is always solid.
+_SERIES_LINESTYLES: list[str] = ["-", "--", "-.", ":"]
 
 
 def _unit_labels(model: FEAModel) -> dict[str, str]:
@@ -185,8 +191,9 @@ def plot_shear_force_diagram(
 
     for i, sol in enumerate(series):
         color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        linestyle = _SERIES_LINESTYLES[i % len(_SERIES_LINESTYLES)]
         x, V, *_ = _concatenate_diagrams(list(sol.element_results))
-        ax.plot(x, V, color=color, linewidth=1.5, label=f"V(x) [{sol.label}]")
+        ax.plot(x, V, color=color, linestyle=linestyle, linewidth=1.5, label=f"V(x) [{sol.label}]")
         if not multi:
             ax.fill_between(x, V, 0, where=(V >= 0), alpha=0.3, color="blue", label="V > 0")
             ax.fill_between(x, V, 0, where=(V < 0), alpha=0.3, color="red", label="V < 0")
@@ -247,8 +254,9 @@ def plot_bending_moment_diagram(
 
     for i, sol in enumerate(series):
         color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        linestyle = _SERIES_LINESTYLES[i % len(_SERIES_LINESTYLES)]
         x, _, M, *_ = _concatenate_diagrams(list(sol.element_results))
-        ax.plot(x, M, color=color, linewidth=1.5, label=f"M(x) [{sol.label}]")
+        ax.plot(x, M, color=color, linestyle=linestyle, linewidth=1.5, label=f"M(x) [{sol.label}]")
         if not multi:
             ax.fill_between(x, M, 0, where=(M >= 0), alpha=0.3,
                             color="green", label="M > 0 (sagging)")
@@ -312,8 +320,9 @@ def plot_transverse_displacement(
 
     for i, sol in enumerate(series):
         color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        linestyle = _SERIES_LINESTYLES[i % len(_SERIES_LINESTYLES)]
         x, _, _, v, *_ = _concatenate_diagrams(list(sol.element_results))
-        ax.plot(x, v, color=color, linewidth=1.5, label=f"v(x) [{sol.label}]")
+        ax.plot(x, v, color=color, linestyle=linestyle, linewidth=1.5, label=f"v(x) [{sol.label}]")
         if not multi:
             ax.fill_between(x, v, 0, alpha=0.15, color="blue")
         _plot_extremes(ax, x, v, color=color, series_label=sol.label if multi else "")
@@ -370,8 +379,9 @@ def plot_axial_displacement(
 
     for i, sol in enumerate(series):
         color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        linestyle = _SERIES_LINESTYLES[i % len(_SERIES_LINESTYLES)]
         x, _, _, _, u_ax, _ = _concatenate_diagrams(list(sol.element_results))
-        ax.plot(x, u_ax, color=color, linewidth=1.5, label=f"u(x) [{sol.label}]")
+        ax.plot(x, u_ax, color=color, linestyle=linestyle, linewidth=1.5, label=f"u(x) [{sol.label}]")
         if not multi:
             ax.fill_between(x, u_ax, 0, alpha=0.15, color="red")
         _plot_extremes(ax, x, u_ax, color=color, series_label=sol.label if multi else "")
@@ -429,8 +439,9 @@ def plot_rotation(
 
     for i, sol in enumerate(series):
         color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        linestyle = _SERIES_LINESTYLES[i % len(_SERIES_LINESTYLES)]
         x, _, _, _, _, theta = _concatenate_diagrams(list(sol.element_results))
-        ax.plot(x, theta, color=color, linewidth=1.5, label=f"theta(x) [{sol.label}]")
+        ax.plot(x, theta, color=color, linestyle=linestyle, linewidth=1.5, label=f"theta(x) [{sol.label}]")
         if not multi:
             ax.fill_between(x, theta, 0, alpha=0.15, color="green")
         _plot_extremes(ax, x, theta, color=color, series_label=sol.label if multi else "")

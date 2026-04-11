@@ -303,3 +303,22 @@ class TestMultiSeriesPlots:
         fig = plot_rotation([s1, s2])
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
+
+    def test_linestyles_are_distinct_for_two_series(self) -> None:
+        """Two series main lines use distinct line styles (solid vs dashed)."""
+        s1 = _make_series(label="coarse")
+        s2 = _make_series(label="fine")
+        fig = plot_shear_force_diagram([s1, s2])
+        ax = fig.axes[0]
+        main_lines = [ln for ln in ax.get_lines() if ln.get_label().startswith("V(x)")]
+        assert len(main_lines) >= 2
+        assert main_lines[0].get_linestyle() != main_lines[1].get_linestyle()
+        plt.close(fig)
+
+    def test_first_series_is_solid(self) -> None:
+        """First series uses a solid line style."""
+        fig = plot_shear_force_diagram([_make_series(label="coarse"), _make_series(label="fine")])
+        ax = fig.axes[0]
+        first_line = next(ln for ln in ax.get_lines() if ln.get_label().startswith("V(x)"))
+        assert first_line.get_linestyle() == "-"
+        plt.close(fig)
