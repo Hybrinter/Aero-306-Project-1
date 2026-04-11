@@ -34,10 +34,16 @@ _DistributedLoadSchema: Pydantic schema for a single distributed load entry.
 _LoadsSchema:          Pydantic schema for the loads block; defaults both sublists to empty.
 _MeshSchema:           Pydantic schema for the mesh block.
 _FEAModelSchema:       Top-level Pydantic schema for the entire YAML file.
+_SolutionEntrySchema:  Pydantic schema for one entry in the 'solutions' list (multi-solution).
+_MultiSolutionFileSchema: Top-level schema for multi-solution YAML files.
 _schema_to_model:      Converts a validated _FEAModelSchema into a FEAModel dataclass,
                        resolving referential integrity (node refs, duplicate IDs, enum lookups)
                        and applying unit conversions via UnitConverter.
-load_model_from_yaml:  Public API -- reads YAML, validates via Pydantic, returns FEAModel.
+_parse_multi_solution: Converts a _MultiSolutionFileSchema into a list of FEAModels by
+                       merging the shared unit_system/units with each solution's mesh/loads.
+load_model_from_yaml:  Public API -- reads single-solution YAML, returns one FEAModel.
+load_models_from_yaml: Public API -- detects single vs multi-solution YAML, returns list
+                       of FEAModels. Use this for all new callers.
 """
 from __future__ import annotations
 
@@ -312,6 +318,64 @@ class _FEAModelSchema(BaseModel):
     loads: _LoadsSchema = Field(default_factory=_LoadsSchema)
 
 
+class _SolutionEntrySchema(BaseModel):
+    """Pydantic schema for one entry in the top-level 'solutions' list.
+
+    Each entry is a self-contained mesh definition for one refinement level.
+    The top-level unit_system and units block are shared across all entries
+    and are injected during conversion in _parse_multi_solution.
+
+    Args:
+        label (str): Short solution label (e.g. "coarse", "fine"). Default "".
+        mesh (_MeshSchema): Mesh block for this solution.
+        materials (dict[str, _MaterialSchema]): Named material properties.
+        boundary_conditions (list[_BCSchema]): Kinematic constraints. Default [].
+        loads (_LoadsSchema): Applied loads block. Defaults to empty.
+
+    Notes:
+        Extra keys (e.g. 'description') are silently ignored by Pydantic v2
+        because model_config is not set to 'forbid' -- this allows YAML authors
+        to include documentation fields without parse errors.
+        unit_system and units are intentionally absent; they are inherited from
+        the parent _MultiSolutionFileSchema and merged in _parse_multi_solution.
+    """
+
+    label: str = ""
+    mesh: _MeshSchema
+    materials: dict[str, _MaterialSchema]
+    boundary_conditions: list[_BCSchema] = Field(default_factory=list)
+    loads: _LoadsSchema = Field(default_factory=_LoadsSchema)
+
+    model_config = {"extra": "ignore"}
+
+
+class _MultiSolutionFileSchema(BaseModel):
+    """Top-level Pydantic schema for multi-solution YAML files.
+
+    Selected when the raw YAML dict contains a 'solutions' key rather than a
+    top-level 'mesh' key. The unit_system and units fields are shared across
+    all solution entries.
+
+    Args:
+        label (str): Top-level problem label. Defaults to "".
+        unit_system (str): Shared canonical unit system ("SI" or "empirical"). Default "SI".
+        units (_UnitsSchema): Shared input unit overrides. Defaults to empty.
+        solutions (list[_SolutionEntrySchema]): One or more solution entries.
+            Must be non-empty (min_length=1 enforced by Pydantic).
+
+    Notes:
+        Extra keys (e.g. 'description') are silently ignored.
+        Validated by _parse_multi_solution via model_validate().
+    """
+
+    label: str = ""
+    unit_system: str = "SI"
+    units: _UnitsSchema = Field(default_factory=_UnitsSchema)
+    solutions: list[_SolutionEntrySchema] = Field(min_length=1)
+
+    model_config = {"extra": "ignore"}
+
+
 # ---------------------------------------------------------------------------
 # Schema -> FEA dataclass conversion
 # ---------------------------------------------------------------------------
@@ -513,3 +577,111 @@ def load_model_from_yaml(path: Path) -> FEAModel:
     logger.info("Model '%s' loaded: %d nodes, %d elements", label,
                 len(model.mesh.nodes), len(model.mesh.elements))
     return model
+
+
+def load_models_from_yaml(path: Path) -> list[FEAModel]:
+    """Parse a YAML config file into one or more validated FEAModel instances.
+
+    Detects whether the file uses the single-solution format (top-level 'mesh' key)
+    or the multi-solution format (top-level 'solutions' key) and dispatches accordingly.
+    Both formats return a list, so callers are uniform regardless of input format.
+
+    Args:
+        path (Path): Filesystem path to YAML case definition file.
+
+    Returns:
+        list[FEAModel]: One FEAModel per solution. For multi-solution files, labels
+            follow the pattern "{top_label}/{solution_label}". For single-solution
+            files, the label is the value of the top-level 'label' key (or file stem).
+
+    Raises:
+        FileNotFoundError: If path does not exist.
+        ValueError: If the YAML has neither a 'mesh' nor a 'solutions' key at top level,
+            or if referential integrity fails within any solution.
+        pydantic.ValidationError: If any solution entry is structurally invalid (wrong
+            field types, E <= 0, A <= 0, empty solutions list).
+
+    Notes:
+        For multi-solution files, unit_system and units are shared across all solutions.
+        The existing load_model_from_yaml function is reused for the single-solution path
+        to avoid any duplication of parsing and conversion logic.
+        Composite labels use '/' as a separator (e.g. "problem_1/coarse"). Callers that
+        need filesystem-safe strings should replace '/' with '_'.
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    with path.open("r", encoding="utf-8") as f:
+        raw: dict[str, Any] = yaml.safe_load(f)
+
+    top_label = str(raw.get("label", path.stem))
+
+    if "solutions" in raw:
+        return _parse_multi_solution(raw, top_label, path)
+    elif "mesh" in raw:
+        logger.info("Single-solution YAML detected: %s", path)
+        return [load_model_from_yaml(path)]
+    else:
+        raise ValueError(
+            f"YAML file '{path}' must have either a top-level 'mesh' key "
+            f"(single-solution) or a top-level 'solutions' key (multi-solution)."
+        )
+
+
+def _parse_multi_solution(
+    raw: dict[str, Any],
+    top_label: str,
+    path: Path,
+) -> list[FEAModel]:
+    """Parse a multi-solution YAML dict into a list of FEAModel instances.
+
+    Args:
+        raw (dict[str, Any]): Full parsed YAML dict loaded from file.
+        top_label (str): Top-level label extracted from the YAML or file stem.
+        path (Path): Source file path, used only for log messages.
+
+    Returns:
+        list[FEAModel]: One FEAModel per solution entry. Labels are composite:
+            "{top_label}/{solution_label}" where solution_label defaults to the
+            1-based index string if the solutions entry has no label.
+
+    Raises:
+        pydantic.ValidationError: If any solution entry fails Pydantic validation
+            or the solutions list is empty.
+        ValueError: If _schema_to_model raises referential integrity errors for
+            any solution entry.
+
+    Notes:
+        Constructs a _FEAModelSchema for each solution by merging the shared
+        unit_system/units from the top-level schema with the per-solution
+        mesh/materials/boundary_conditions/loads.
+        Calls _schema_to_model unchanged for each merged schema.
+    """
+    file_schema = _MultiSolutionFileSchema.model_validate(raw)
+    logger.info("Parsing multi-solution file '%s': %d solutions", path, len(file_schema.solutions))
+
+    models: list[FEAModel] = []
+    for i, sol in enumerate(file_schema.solutions):
+        sol_label_part = sol.label if sol.label else str(i + 1)
+        composite_label = f"{top_label}/{sol_label_part}"
+
+        merged_schema = _FEAModelSchema(
+            label=composite_label,
+            unit_system=file_schema.unit_system,
+            units=file_schema.units,
+            mesh=sol.mesh,
+            materials=sol.materials,
+            boundary_conditions=sol.boundary_conditions,
+            loads=sol.loads,
+        )
+
+        model = _schema_to_model(merged_schema, composite_label)
+        logger.info(
+            "Solution '%s' loaded: %d nodes, %d elements",
+            composite_label,
+            len(model.mesh.nodes),
+            len(model.mesh.elements),
+        )
+        models.append(model)
+
+    return models

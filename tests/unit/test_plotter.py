@@ -258,14 +258,15 @@ class TestMultiSeriesPlots:
             plot_shear_force_diagram([])
 
     def test_colors_are_distinct_for_two_series(self) -> None:
-        """Two series are plotted with distinct colors."""
+        """Two series main lines are plotted with distinct colors."""
         s1 = _make_series(label="coarse")
         s2 = _make_series(label="fine")
         fig = plot_shear_force_diagram([s1, s2])
         ax = fig.axes[0]
+        # Filter for main plot lines only (label starts with "V(x)"), not extreme markers
         main_lines = [
             ln for ln in ax.get_lines()
-            if "coarse" in ln.get_label() or "fine" in ln.get_label()
+            if ln.get_label().startswith("V(x)")
         ]
         assert len(main_lines) >= 2
         assert main_lines[0].get_color() != main_lines[1].get_color()

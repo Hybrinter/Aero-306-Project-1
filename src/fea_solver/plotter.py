@@ -6,6 +6,11 @@ problems display the correct units without any hard-coded strings.
 Max and min values are shown as distinct markers (circle / square) with their
 numeric values recorded in the legend, not as floating text annotations.
 
+For single-solution plots, fill_between shading is used to emphasise sign.
+For multi-solution overlay plots (more than one SolutionSeries), fill_between
+is suppressed so overlapping fills do not obscure one another; each series is
+drawn in a distinct color from _SERIES_COLORS.
+
 Provides:
   - plot_shear_force_diagram:       V(x) vs x
   - plot_bending_moment_diagram:    M(x) vs x (inverted y-axis, sagging positive down)
@@ -14,6 +19,7 @@ Provides:
   - plot_rotation:                  theta(x) in radians
   - show_all_plots:                 plt.show() wrapper
 
+_SERIES_COLORS:         List of hex color strings cycled across multiple series.
 _concatenate_diagrams:  Sorts and concatenates x, V, M, v, u, theta across elements.
 _unit_labels:           Returns UNIT_LABELS dict for the model's unit system.
 _plot_extremes:         Adds max/min markers with legend entries to an Axes.
@@ -26,10 +32,21 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from fea_solver.models import ElementResult, FEAModel
+from fea_solver.models import ElementResult, FEAModel, SolutionSeries
 from fea_solver.units import UNIT_LABELS
 
 logger = logging.getLogger(__name__)
+
+# Tableau palette hex codes -- used in order for successive series in overlay plots.
+# Cycles if more than 6 solutions are present (rare for this project).
+_SERIES_COLORS: list[str] = [
+    "#1f77b4",  # blue
+    "#d62728",  # red
+    "#2ca02c",  # green
+    "#ff7f0e",  # orange
+    "#9467bd",  # purple
+    "#8c564b",  # brown
+]
 
 
 def _unit_labels(model: FEAModel) -> dict[str, str]:
@@ -87,6 +104,7 @@ def _plot_extremes(
     y: np.ndarray,
     color: str = "black",
     fmt: str = ".4g",
+    series_label: str = "",
 ) -> None:
     """Plot max and min of y as distinct markers; record values in the legend.
 
@@ -96,6 +114,9 @@ def _plot_extremes(
         y (np.ndarray): y-value array.
         color (str): Marker fill colour. Default "black".
         fmt (str): Format string for legend value text. Default ".4g".
+        series_label (str): If non-empty, prepended to legend text so multiple
+            series can be distinguished. E.g. "coarse max = 5.0" vs "fine max = 4.9".
+            Default "" (produces "max = 5.0" without a prefix).
 
     Returns:
         None
@@ -110,53 +131,66 @@ def _plot_extremes(
     """
     max_idx = int(np.argmax(y))
     min_idx = int(np.argmin(y))
+    prefix = f"{series_label} " if series_label else ""
 
     ax.plot(
         x[max_idx], y[max_idx],
         marker="o", color=color, markersize=7, linestyle="none", zorder=5,
-        label=f"max = {y[max_idx]:{fmt}}",
+        label=f"{prefix}max = {y[max_idx]:{fmt}}",
     )
     if max_idx != min_idx:
         ax.plot(
             x[min_idx], y[min_idx],
             marker="s", color=color, markersize=7, linestyle="none", zorder=5,
-            label=f"min = {y[min_idx]:{fmt}}",
+            label=f"{prefix}min = {y[min_idx]:{fmt}}",
         )
 
 
 def plot_shear_force_diagram(
-    element_results: list[ElementResult],
-    model: FEAModel,
+    series: list[SolutionSeries],
     title: str = "Shear",
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot V(x) vs x (shear force diagram) with unit-aware axis labels.
+    """Plot V(x) vs x (shear force diagram) for one or more solutions on shared axes.
 
-    Positive shear is plotted above the baseline (blue fill),
-    negative shear below (red fill). Max and min are shown as markers
-    whose values appear in the legend.
+    For a single solution, preserves fill_between shading (positive shear: blue,
+    negative shear: red). For multiple solutions, fill_between is suppressed to
+    avoid visual clutter; each series is drawn in a distinct color from
+    _SERIES_COLORS. Max and min markers are shown per series with the series
+    label included in the legend entry when multiple series are present.
 
     Args:
-        element_results (list[ElementResult]): Post-processed element results.
-        model (FEAModel): FEA model; used to determine axis unit labels.
+        series (list[SolutionSeries]): One or more solution bundles to overlay.
+            Must be non-empty. Unit labels are taken from series[0].model.
         title (str): Plot title. Default "Shear".
         output_path (Path | None): If provided, save figure to this path as PNG.
 
     Returns:
         plt.Figure: The matplotlib Figure.
 
+    Raises:
+        ValueError: If series is empty.
+
     Notes:
         If output_path is provided, saves figure at 150 dpi.
     """
-    lbl = _unit_labels(model)
-    x, V, *_ = _concatenate_diagrams(element_results)
+    if not series:
+        raise ValueError("series must be non-empty")
+
+    lbl = _unit_labels(series[0].model)
+    multi = len(series) > 1
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(x, V, "k-", linewidth=1.5, label="V(x)")
-    ax.fill_between(x, V, 0, where=(V >= 0), alpha=0.3, color="blue", label="V > 0")
-    ax.fill_between(x, V, 0, where=(V < 0), alpha=0.3, color="red", label="V < 0")
     ax.axhline(0, color="k", linewidth=0.8, linestyle="--")
-    _plot_extremes(ax, x, V)
+
+    for i, sol in enumerate(series):
+        color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        x, V, *_ = _concatenate_diagrams(list(sol.element_results))
+        ax.plot(x, V, color=color, linewidth=1.5, label=f"V(x) [{sol.label}]")
+        if not multi:
+            ax.fill_between(x, V, 0, where=(V >= 0), alpha=0.3, color="blue", label="V > 0")
+            ax.fill_between(x, V, 0, where=(V < 0), alpha=0.3, color="red", label="V < 0")
+        _plot_extremes(ax, x, V, color=color, series_label=sol.label if multi else "")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"V [{lbl['force']}]")
@@ -173,21 +207,22 @@ def plot_shear_force_diagram(
 
 
 def plot_bending_moment_diagram(
-    element_results: list[ElementResult],
-    model: FEAModel,
+    series: list[SolutionSeries],
     title: str = "Moments",
     output_path: Path | None = None,
     invert_y: bool = True,
 ) -> plt.Figure:
-    """Plot M(x) vs x (bending moment diagram) with unit-aware axis labels.
+    """Plot M(x) vs x (bending moment diagram) for one or more solutions on shared axes.
 
     By default, the y-axis is inverted so that sagging (positive moment)
-    plots downward, following structural engineering convention. Max and min
-    are shown as markers whose values appear in the legend.
+    plots downward, following structural engineering convention. For a single
+    solution, fill_between shading is used (sagging: green, hogging: orange).
+    For multiple solutions, fill_between is suppressed; each series uses a
+    distinct color from _SERIES_COLORS.
 
     Args:
-        element_results (list[ElementResult]): Post-processed element results.
-        model (FEAModel): FEA model; used to determine axis unit labels.
+        series (list[SolutionSeries]): One or more solution bundles to overlay.
+            Must be non-empty. Unit labels taken from series[0].model.
         title (str): Plot title. Default "Moments".
         output_path (Path | None): If provided, save figure to this path as PNG.
         invert_y (bool): If True, invert y-axis (sagging positive = downward).
@@ -195,19 +230,31 @@ def plot_bending_moment_diagram(
     Returns:
         plt.Figure: The matplotlib Figure.
 
+    Raises:
+        ValueError: If series is empty.
+
     Notes:
-        Sagging (positive) moments shown in green; hogging (negative) in orange.
         If output_path is provided, saves figure at 150 dpi.
     """
-    lbl = _unit_labels(model)
-    x, _, M, *__ = _concatenate_diagrams(element_results)
+    if not series:
+        raise ValueError("series must be non-empty")
+
+    lbl = _unit_labels(series[0].model)
+    multi = len(series) > 1
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(x, M, "k-", linewidth=1.5, label="M(x)")
-    ax.fill_between(x, M, 0, where=(M >= 0), alpha=0.3, color="green", label="M > 0 (sagging)")
-    ax.fill_between(x, M, 0, where=(M < 0), alpha=0.3, color="orange", label="M < 0 (hogging)")
     ax.axhline(0, color="k", linewidth=0.8, linestyle="--")
-    _plot_extremes(ax, x, M)
+
+    for i, sol in enumerate(series):
+        color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        x, _, M, *_ = _concatenate_diagrams(list(sol.element_results))
+        ax.plot(x, M, color=color, linewidth=1.5, label=f"M(x) [{sol.label}]")
+        if not multi:
+            ax.fill_between(x, M, 0, where=(M >= 0), alpha=0.3,
+                            color="green", label="M > 0 (sagging)")
+            ax.fill_between(x, M, 0, where=(M < 0), alpha=0.3,
+                            color="orange", label="M < 0 (hogging)")
+        _plot_extremes(ax, x, M, color=color, series_label=sol.label if multi else "")
 
     if invert_y:
         ax.invert_yaxis()
@@ -227,38 +274,49 @@ def plot_bending_moment_diagram(
 
 
 def plot_transverse_displacement(
-    element_results: list[ElementResult],
-    model: FEAModel,
+    series: list[SolutionSeries],
     title: str = "Vertical Displacement",
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot transverse displacement v(x) in physical units.
+    """Plot transverse displacement v(x) for one or more solutions on shared axes.
 
     No scale factor is applied; the y-axis shows actual displacement values
-    with the correct units for the problem. Max and min are shown as markers
-    whose values appear in the legend.
+    with the correct units for the problem. For a single solution, a light blue
+    fill_between is shown. For multiple solutions, fill_between is suppressed;
+    each series uses a distinct color.
 
     Args:
-        element_results (list[ElementResult]): Post-processed element results.
-        model (FEAModel): FEA model; used to determine axis unit labels.
+        series (list[SolutionSeries]): One or more solution bundles to overlay.
+            Must be non-empty. Unit labels taken from series[0].model.
         title (str): Plot title. Default "Vertical Displacement".
         output_path (Path | None): If provided, save figure to this path as PNG.
 
     Returns:
         plt.Figure: The matplotlib Figure.
 
+    Raises:
+        ValueError: If series is empty.
+
     Notes:
         v(x) is recovered via Hermite cubic shape functions in the postprocessor.
         If output_path is provided, saves figure at 150 dpi.
     """
-    lbl = _unit_labels(model)
-    x, _, _, v, *__ = _concatenate_diagrams(element_results)
+    if not series:
+        raise ValueError("series must be non-empty")
+
+    lbl = _unit_labels(series[0].model)
+    multi = len(series) > 1
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(x, v, "b-", linewidth=1.5, label="v(x)")
-    ax.fill_between(x, v, 0, alpha=0.15, color="blue")
     ax.axhline(0, color="k", linewidth=0.8, linestyle="--")
-    _plot_extremes(ax, x, v)
+
+    for i, sol in enumerate(series):
+        color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        x, _, _, v, *_ = _concatenate_diagrams(list(sol.element_results))
+        ax.plot(x, v, color=color, linewidth=1.5, label=f"v(x) [{sol.label}]")
+        if not multi:
+            ax.fill_between(x, v, 0, alpha=0.15, color="blue")
+        _plot_extremes(ax, x, v, color=color, series_label=sol.label if multi else "")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"v(x) [{lbl['displacement']}]")
@@ -275,37 +333,48 @@ def plot_transverse_displacement(
 
 
 def plot_axial_displacement(
-    element_results: list[ElementResult],
-    model: FEAModel,
+    series: list[SolutionSeries],
     title: str = "Axial Displacement",
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot axial displacement u(x) in physical units.
+    """Plot axial displacement u(x) for one or more solutions on shared axes.
 
-    For BAR and FRAME elements, u(x) is linearly interpolated from nodal
-    axial DOFs. For pure BEAM elements, u(x) is identically zero. Max and
-    min are shown as markers whose values appear in the legend.
+    For BAR and FRAME elements, u(x) is linearly interpolated from nodal axial
+    DOFs. For pure BEAM elements, u(x) is identically zero. For a single
+    solution, a light red fill_between is shown. For multiple solutions,
+    fill_between is suppressed; each series uses a distinct color.
 
     Args:
-        element_results (list[ElementResult]): Post-processed element results.
-        model (FEAModel): FEA model; used to determine axis unit labels.
+        series (list[SolutionSeries]): One or more solution bundles to overlay.
+            Must be non-empty. Unit labels taken from series[0].model.
         title (str): Plot title. Default "Axial Displacement".
         output_path (Path | None): If provided, save figure to this path as PNG.
 
     Returns:
         plt.Figure: The matplotlib Figure.
 
+    Raises:
+        ValueError: If series is empty.
+
     Notes:
         If output_path is provided, saves figure at 150 dpi.
     """
-    lbl = _unit_labels(model)
-    x, _, _, _, u_ax, _ = _concatenate_diagrams(element_results)
+    if not series:
+        raise ValueError("series must be non-empty")
+
+    lbl = _unit_labels(series[0].model)
+    multi = len(series) > 1
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(x, u_ax, "r-", linewidth=1.5, label="u(x)")
-    ax.fill_between(x, u_ax, 0, alpha=0.15, color="red")
     ax.axhline(0, color="k", linewidth=0.8, linestyle="--")
-    _plot_extremes(ax, x, u_ax)
+
+    for i, sol in enumerate(series):
+        color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        x, _, _, _, u_ax, _ = _concatenate_diagrams(list(sol.element_results))
+        ax.plot(x, u_ax, color=color, linewidth=1.5, label=f"u(x) [{sol.label}]")
+        if not multi:
+            ax.fill_between(x, u_ax, 0, alpha=0.15, color="red")
+        _plot_extremes(ax, x, u_ax, color=color, series_label=sol.label if multi else "")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"u(x) [{lbl['displacement']}]")
@@ -322,38 +391,49 @@ def plot_axial_displacement(
 
 
 def plot_rotation(
-    element_results: list[ElementResult],
-    model: FEAModel,
+    series: list[SolutionSeries],
     title: str = "Rotation",
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot cross-section rotation theta(x) in radians.
+    """Plot cross-section rotation theta(x) for one or more solutions on shared axes.
 
     theta(x) = dv/dx, recovered from Hermite shape function first derivatives.
-    For BAR elements, rotation is identically zero. Max and min are shown as
-    markers whose values appear in the legend.
+    For BAR elements, rotation is identically zero. For a single solution, a
+    light green fill_between is shown. For multiple solutions, fill_between is
+    suppressed; each series uses a distinct color.
 
     Args:
-        element_results (list[ElementResult]): Post-processed element results.
-        model (FEAModel): FEA model; used to determine axis unit labels.
+        series (list[SolutionSeries]): One or more solution bundles to overlay.
+            Must be non-empty. Unit labels taken from series[0].model.
         title (str): Plot title. Default "Rotation".
         output_path (Path | None): If provided, save figure to this path as PNG.
 
     Returns:
         plt.Figure: The matplotlib Figure.
 
+    Raises:
+        ValueError: If series is empty.
+
     Notes:
         Rotation is always in radians regardless of unit system.
         If output_path is provided, saves figure at 150 dpi.
     """
-    lbl = _unit_labels(model)
-    x, _, _, _, _, theta = _concatenate_diagrams(element_results)
+    if not series:
+        raise ValueError("series must be non-empty")
+
+    lbl = _unit_labels(series[0].model)
+    multi = len(series) > 1
 
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(x, theta, "g-", linewidth=1.5, label="theta(x)")
-    ax.fill_between(x, theta, 0, alpha=0.15, color="green")
     ax.axhline(0, color="k", linewidth=0.8, linestyle="--")
-    _plot_extremes(ax, x, theta)
+
+    for i, sol in enumerate(series):
+        color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+        x, _, _, _, _, theta = _concatenate_diagrams(list(sol.element_results))
+        ax.plot(x, theta, color=color, linewidth=1.5, label=f"theta(x) [{sol.label}]")
+        if not multi:
+            ax.fill_between(x, theta, 0, alpha=0.15, color="green")
+        _plot_extremes(ax, x, theta, color=color, series_label=sol.label if multi else "")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"theta(x) [{lbl['rotation']}]")

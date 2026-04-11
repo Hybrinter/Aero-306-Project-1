@@ -2,6 +2,16 @@
 
 All dataclasses are frozen (immutable after construction) following Rust-istic
 design principles. Enums provide type-safe dispatch throughout the system.
+
+Key types:
+  Node, Element, Mesh, MaterialProperties: geometric and material data.
+  BoundaryCondition, NodalLoad, DistributedLoad: applied constraints and loads.
+  FEAModel: complete problem definition (mesh + BCs + loads).
+  DOFMap: (node_id, DOFType) -> global DOF index mapping.
+  SolutionResult: displacements and reactions from a single solve.
+  ElementResult: internal forces, moments, and displacements at sampling stations.
+  SolutionSeries: bundle of ElementResults + model for one named mesh refinement;
+      used when overlaying multiple solutions on shared plot axes.
 """
 
 from __future__ import annotations
@@ -427,3 +437,32 @@ class ElementResult:
     transverse_displacements: NDArray[np.float64]    # v(x), shape (n_stations,); zeros for BAR
     axial_displacements: NDArray[np.float64]         # u(x), shape (n_stations,); zeros for BEAM
     rotations: NDArray[np.float64]                   # theta(x) [rad], shape (n_stations,); zeros for BAR
+
+
+@dataclass(frozen=True, slots=True)
+class SolutionSeries:
+    """Bundle of post-processed results for one named mesh refinement.
+
+    Groups element-level results with their parent model so that plotting
+    functions can render multiple solutions on shared axes without receiving
+    parallel lists of disparate types.
+
+    Fields:
+        label (str): Short human-readable name for this solution (e.g. "coarse", "fine").
+            Used for legend entries and per-solution max/min annotations.
+        element_results (tuple[ElementResult, ...]): Immutable sequence of post-processed
+            element results for all elements in this solution's mesh.
+        model (FEAModel): The FEA model that produced these results; used to retrieve
+            unit labels for axis annotations.
+
+    Notes:
+        Frozen and slotted, matching the style of all other result containers.
+        element_results is a tuple (not list) to satisfy the frozen invariant.
+        At call sites, wrap a list with tuple(): tuple(element_results_list).
+        The model is carried here (not recovered from ElementResult) because
+        ElementResult does not hold a model reference.
+    """
+
+    label: str
+    element_results: tuple[ElementResult, ...]
+    model: FEAModel
