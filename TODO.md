@@ -1,4 +1,2 @@
-- Add pydantic to parse configs
-- Update main.py to be as simple to run as possible (CLI as option, not as requirement)
 - Update outputs formats for readability
 - Verify outputs match expectations

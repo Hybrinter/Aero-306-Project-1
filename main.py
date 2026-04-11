@@ -1,6 +1,7 @@
 """AERO 306 FEA Solver -- CLI entrypoint.
 
 Usage:
+    uv run python main.py                                            # interactive menu
     uv run python main.py config/case_02_cantilever_beam.yaml
     uv run python main.py config/case_01_bar_axial.yaml --no-plot
     uv run python main.py config/case_06_distributed_load.yaml --save-plots outputs/
@@ -13,6 +14,8 @@ from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")  # non-interactive backend; safe for CLI and CI
+
+from rich.console import Console as _Console
 
 from fea_solver.assembler import (
     assemble_global_force_vector,
@@ -38,6 +41,45 @@ from fea_solver.reporter import (
 from fea_solver.solver import run_solve_pipeline
 
 
+_CONFIG_DIR = Path(__file__).parent / "config"
+
+
+def _interactive_select_config() -> Path | None:
+    """Display a numbered menu of available YAML config files and return the chosen path.
+
+    Args:
+        None
+
+    Returns:
+        Path | None: Path to the selected YAML file, or None if no files are found.
+
+    Notes:
+        Scans _CONFIG_DIR (project root / config/) for *.yaml files.
+        Re-prompts on invalid input until a valid integer in range is entered.
+        Returns None (causing a graceful exit in main) if config/ is empty or missing.
+    """
+    console = _Console()
+    yaml_files = sorted(_CONFIG_DIR.glob("*.yaml"))
+    if not yaml_files:
+        console.print("[bold red]No YAML files found in config/[/bold red]")
+        return None
+
+    console.print("\n[bold cyan]AERO 306 FEA Solver[/bold cyan] -- select a case:\n")
+    for i, f in enumerate(yaml_files, start=1):
+        console.print(f"  [bold]{i:>2}.[/bold] {f.stem}")
+
+    console.print()
+    while True:
+        raw = input(f"Case [1-{len(yaml_files)}]: ").strip()
+        try:
+            idx = int(raw)
+            if 1 <= idx <= len(yaml_files):
+                return yaml_files[idx - 1]
+        except ValueError:
+            pass
+        console.print(f"[yellow]Enter a number between 1 and {len(yaml_files)}.[/yellow]")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for the FEA solver CLI.
 
@@ -46,7 +88,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     Returns:
         argparse.Namespace: Parsed arguments with fields:
-            config (str): Path to YAML case file.
+            config (Path | None): Path to YAML case file, or None to trigger
+                interactive selection in main().
             no_plot (bool): Suppress all plot windows if True.
             save_plots (str | None): Directory to save plot images, or None.
             n_stations (int): Number of evaluation points per element for post-processing.
@@ -60,7 +103,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("config", type=Path, help="Path to YAML config file")
+    parser.add_argument(
+        "config", type=Path, nargs="?", default=None,
+        help="Path to YAML config file (omit for interactive menu)",
+    )
     parser.add_argument(
         "--no-plot", action="store_true", help="Skip rendering plots"
     )
@@ -86,14 +132,23 @@ def main(argv: list[str] | None = None) -> int:
         argv (list[str] | None): Command-line arguments. Uses sys.argv[1:] if None.
 
     Returns:
-        int: Exit code (0 for success, 1 for file error, 2 for solve error).
+        int: Exit code (0 for success, 1 for file/config error, 2 for solve error).
 
     Notes:
+        If no config path is provided via argv, an interactive numbered menu is shown
+        listing all *.yaml files in config/ for the user to pick from.
         Prints DOF table, nodal results, reactions, and element forces to console.
         Generates optional plots (SFD, BMD, deformed shape) if not suppressed.
         All output logged to file and console with configurable levels.
     """
     args = parse_args(argv)
+
+    # --- Interactive config selection (no-arg run) ---
+    if args.config is None:
+        selected = _interactive_select_config()
+        if selected is None:
+            return 1
+        args.config = selected
 
     # --- Load model ---
     try:
