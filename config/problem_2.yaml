@@ -37,9 +37,10 @@ solutions:
       nodal:
         - {node_id: 4, type: point_force_y, magnitude: -10.0}   # lb, downward
       distributed:
-        - {element_id: 1, type: distributed_y, w_i: 0.025, w_j: 0.025}   # lb/in, upward
-        - {element_id: 2, type: distributed_y, w_i: 0.025, w_j: 0.025}
-        - {element_id: 3, type: distributed_y, w_i: 0.025, w_j: 0.025}
+        - element_ids: all
+          expression: "w0"
+          parameters:
+            w0: 0.025   # lb/in, upward
 
   - label: fine
     # 6 elements of 60 in each
@@ -70,9 +71,7 @@ solutions:
       nodal:
         - {node_id: 7, type: point_force_y, magnitude: -10.0}   # lb, downward
       distributed:
-        - {element_id: 1, type: distributed_y, w_i: 0.025, w_j: 0.025}   # lb/in, upward
-        - {element_id: 2, type: distributed_y, w_i: 0.025, w_j: 0.025}
-        - {element_id: 3, type: distributed_y, w_i: 0.025, w_j: 0.025}
-        - {element_id: 4, type: distributed_y, w_i: 0.025, w_j: 0.025}
-        - {element_id: 5, type: distributed_y, w_i: 0.025, w_j: 0.025}
-        - {element_id: 6, type: distributed_y, w_i: 0.025, w_j: 0.025}
+        - element_ids: all
+          expression: "w0"
+          parameters:
+            w0: 0.025   # lb/in, upward

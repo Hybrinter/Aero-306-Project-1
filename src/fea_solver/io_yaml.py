@@ -22,7 +22,10 @@ Expected YAML schema:
   boundary_conditions: [{node_id: int, type: str}, ...]
   loads:
     nodal: [{node_id: int, type: str, magnitude: float}, ...]
-    distributed: [{element_id: int, type: str, w_i: float, w_j: float}, ...]
+    distributed:
+      - element_ids: all | [int, ...]   # "all" targets every element; or explicit list
+        expression: str                 # Python expression; x = node position (input units)
+        parameters: {name: float, ...}  # named constants injected into expression scope
 
 _UnitsSchema:          Pydantic schema for the optional units block.
 _NodeSchema:           Pydantic schema for a single node entry.
@@ -30,7 +33,7 @@ _MaterialSchema:       Pydantic schema for material properties; enforces E > 0, 
 _ElementSchema:        Pydantic schema for a single element entry (refs resolved later).
 _BCSchema:             Pydantic schema for a single boundary condition entry.
 _NodalLoadSchema:      Pydantic schema for a single nodal load entry.
-_DistributedLoadSchema: Pydantic schema for a single distributed load entry.
+_DistributedLoadFunctionSchema: Pydantic schema for a function-based distributed load entry.
 _LoadsSchema:          Pydantic schema for the loads block; defaults both sublists to empty.
 _MeshSchema:           Pydantic schema for the mesh block.
 _FEAModelSchema:       Top-level Pydantic schema for the entire YAML file.
@@ -48,8 +51,9 @@ load_models_from_yaml: Public API -- detects single vs multi-solution YAML, retu
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -102,6 +106,48 @@ _LOAD_TYPE_MAP: dict[str, LoadType] = {
     "distributed_y":      LoadType.DISTRIBUTED_Y,
     "distributed_linear": LoadType.DISTRIBUTED_LINEAR,
 }
+
+
+# ---------------------------------------------------------------------------
+# Expression evaluator for function-based distributed loads
+# ---------------------------------------------------------------------------
+
+
+def _evaluate_expression(expression: str, x: float, parameters: dict[str, float]) -> float:
+    """Evaluate a load distribution expression at a single x coordinate.
+
+    Args:
+        expression (str): Python expression string. May reference 'x', math
+            builtins (sqrt, pi, sin, cos, tan, exp, log, abs), and any key
+            present in 'parameters'.
+        x (float): Position along the beam in input (YAML) units.
+        parameters (dict[str, float]): Named constants injected into the
+            expression namespace. Values must be in the same unit system as x.
+
+    Returns:
+        float: Load intensity in input distributed-load units (before unit
+            conversion). Sign convention follows the YAML coordinate system.
+
+    Notes:
+        Builtins are restricted to the math namespace to prevent arbitrary code
+        execution. The expression is evaluated with __builtins__ set to an empty
+        dict so that global Python builtins (open, exec, import, etc.) are not
+        accessible. Only the functions listed below are in scope:
+        sqrt, pi, sin, cos, tan, exp, log, abs, x, and all parameter keys.
+    """
+    ns: dict[str, object] = {
+        "x":    x,
+        "pi":   math.pi,
+        "sqrt": math.sqrt,
+        "sin":  math.sin,
+        "cos":  math.cos,
+        "tan":  math.tan,
+        "exp":  math.exp,
+        "log":  math.log,
+        "abs":  abs,
+        **parameters,
+    }
+    return float(eval(expression, {"__builtins__": {}}, ns))  # noqa: S307
 
 
 # ---------------------------------------------------------------------------
@@ -235,23 +281,29 @@ class _NodalLoadSchema(BaseModel):
     magnitude: float
 
 
-class _DistributedLoadSchema(BaseModel):
-    """Pydantic schema for a single distributed load entry.
+class _DistributedLoadFunctionSchema(BaseModel):
+    """Pydantic schema for a function-based distributed load entry.
 
     Args:
-        element_id (int): ID of the loaded element.
-        type (str): Load type string -- "distributed_y" or "distributed_linear".
-        w_i (float): Load intensity at node i in N/m.
-        w_j (float): Load intensity at node j in N/m.
+        element_ids (list[int] | Literal["all"]): Target element IDs. "all"
+            applies the load to every element in the mesh; an explicit list
+            restricts application to only those element IDs.
+        expression (str): Python expression for load intensity as a function of
+            position. 'x' is the node's raw (input-unit) x coordinate. Math
+            builtins and all 'parameters' keys are in scope.
+        parameters (dict[str, float]): Named float constants injected into the
+            expression namespace. Must be in the same units as the node
+            coordinates (i.e., the YAML input length unit). Defaults to {}.
 
     Notes:
-        String-to-enum conversion and element_id validation happen in _schema_to_model.
+        Referential integrity (element ID existence) and expression evaluation
+        happen in _schema_to_model. Always resolves to LoadType.DISTRIBUTED_LINEAR
+        internally, producing one DistributedLoad per targeted element.
     """
 
-    element_id: int
-    type: str
-    w_i: float
-    w_j: float
+    element_ids: list[int] | Literal["all"]
+    expression: str
+    parameters: dict[str, float] = Field(default_factory=dict)
 
 
 class _LoadsSchema(BaseModel):
@@ -259,8 +311,8 @@ class _LoadsSchema(BaseModel):
 
     Args:
         nodal (list[_NodalLoadSchema]): List of nodal load entries. Defaults to [].
-        distributed (list[_DistributedLoadSchema]): List of distributed load entries.
-            Defaults to [].
+        distributed (list[_DistributedLoadFunctionSchema]): List of function-based
+            distributed load entries. Defaults to [].
 
     Notes:
         Both sublists default to empty so the 'loads' key may be omitted entirely
@@ -268,7 +320,7 @@ class _LoadsSchema(BaseModel):
     """
 
     nodal: list[_NodalLoadSchema] = Field(default_factory=list)
-    distributed: list[_DistributedLoadSchema] = Field(default_factory=list)
+    distributed: list[_DistributedLoadFunctionSchema] = Field(default_factory=list)
 
 
 class _MeshSchema(BaseModel):
@@ -510,19 +562,39 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
         ))
 
     # --- Distributed Loads ---
+    # Build raw (pre-conversion) node x lookup and raw element schema lookup for
+    # expression evaluation. Expression uses input-unit x so parameter values in
+    # the YAML match the mesh coordinates as written by the user.
+    raw_node_x_by_id: dict[int, float] = {n.id: n.x for n in schema.mesh.nodes}
+    elem_schema_by_id: dict[int, _ElementSchema] = {e.id: e for e in schema.mesh.elements}
+
     dist_loads: list[DistributedLoad] = []
     for ld in schema.loads.distributed:
-        if ld.element_id not in element_ids:
-            raise ValueError(f"Distributed load references unknown element_id={ld.element_id}")
-        lt_str = ld.type.lower()
-        if lt_str not in _LOAD_TYPE_MAP:
-            raise ValueError(f"Unknown distributed load type: '{lt_str}'")
-        dist_loads.append(DistributedLoad(
-            element_id=ld.element_id,
-            load_type=_LOAD_TYPE_MAP[lt_str],
-            w_i=conv.convert(ld.w_i, "distributed"),
-            w_j=conv.convert(ld.w_j, "distributed"),
-        ))
+        # Resolve element_ids: "all" -> every element; explicit list -> validate each
+        if ld.element_ids == "all":
+            target_ids: list[int] = sorted(element_ids)
+        else:
+            for eid in ld.element_ids:
+                if eid not in element_ids:
+                    raise ValueError(f"Distributed load references unknown element_id={eid}")
+            target_ids = list(ld.element_ids)
+
+        for eid in target_ids:
+            es = elem_schema_by_id[eid]
+            x_i = raw_node_x_by_id[es.node_i]
+            x_j = raw_node_x_by_id[es.node_j]
+            w_i = conv.convert(
+                _evaluate_expression(ld.expression, x_i, ld.parameters), "distributed"
+            )
+            w_j = conv.convert(
+                _evaluate_expression(ld.expression, x_j, ld.parameters), "distributed"
+            )
+            dist_loads.append(DistributedLoad(
+                element_id=eid,
+                load_type=LoadType.DISTRIBUTED_LINEAR,
+                w_i=w_i,
+                w_j=w_j,
+            ))
 
     return FEAModel(
         mesh=mesh,

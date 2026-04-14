@@ -348,3 +348,149 @@ class TestLoadModelsFromYaml:
         models = load_models_from_yaml(p)
         assert len(models) == 2
         assert all(m.unit_system == UnitSystem.EMPIRICAL for m in models)
+
+
+# ---------------------------------------------------------------------------
+# Distributed load function tests
+# ---------------------------------------------------------------------------
+
+_DIST_FUNC_ALL_YAML = """\
+label: "test_dist_all"
+mesh:
+  nodes:
+    - {id: 1, x: 0.0}
+    - {id: 2, x: 1.0}
+    - {id: 3, x: 2.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
+    - {id: 2, node_i: 2, node_j: 3, type: beam, material: steel}
+materials:
+  steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
+boundary_conditions:
+  - {node_id: 1, type: pin}
+  - {node_id: 3, type: roller}
+loads:
+  distributed:
+    - element_ids: all
+      expression: "w0"
+      parameters:
+        w0: -500.0
+"""
+
+_DIST_FUNC_EXPLICIT_YAML = """\
+label: "test_dist_explicit"
+mesh:
+  nodes:
+    - {id: 1, x: 0.0}
+    - {id: 2, x: 1.0}
+    - {id: 3, x: 2.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
+    - {id: 2, node_i: 2, node_j: 3, type: beam, material: steel}
+materials:
+  steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
+boundary_conditions:
+  - {node_id: 1, type: pin}
+  - {node_id: 3, type: roller}
+loads:
+  distributed:
+    - element_ids: [1]
+      expression: "w0"
+      parameters:
+        w0: -500.0
+"""
+
+_DIST_FUNC_LINEAR_YAML = """\
+label: "test_dist_linear"
+mesh:
+  nodes:
+    - {id: 1, x: 0.0}
+    - {id: 2, x: 10.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
+materials:
+  steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
+boundary_conditions:
+  - {node_id: 1, type: fixed_all}
+loads:
+  distributed:
+    - element_ids: all
+      expression: "a * x + b"
+      parameters:
+        a: 2.0
+        b: 5.0
+"""
+
+_DIST_FUNC_BAD_ELEMENT_YAML = """\
+label: "test_dist_bad"
+mesh:
+  nodes:
+    - {id: 1, x: 0.0}
+    - {id: 2, x: 1.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
+materials:
+  steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
+boundary_conditions:
+  - {node_id: 1, type: fixed_all}
+loads:
+  distributed:
+    - element_ids: [99]
+      expression: "w0"
+      parameters:
+        w0: -1.0
+"""
+
+
+class TestDistributedLoadFunction:
+    """Tests for function-based distributed load parsing."""
+
+    def test_element_ids_all_applies_to_every_element(self, tmp_path: Path) -> None:
+        """element_ids: all creates one DistributedLoad per element in the mesh."""
+        p = tmp_path / "dist_all.yaml"
+        p.write_text(_DIST_FUNC_ALL_YAML)
+        model = load_model_from_yaml(p)
+        assert len(model.distributed_loads) == 2
+        assert {dl.element_id for dl in model.distributed_loads} == {1, 2}
+
+    def test_element_ids_explicit_list_restricts_targets(self, tmp_path: Path) -> None:
+        """Explicit element_ids list applies load only to listed elements."""
+        p = tmp_path / "dist_explicit.yaml"
+        p.write_text(_DIST_FUNC_EXPLICIT_YAML)
+        model = load_model_from_yaml(p)
+        assert len(model.distributed_loads) == 1
+        assert model.distributed_loads[0].element_id == 1
+
+    def test_constant_expression_correct_w_values(self, tmp_path: Path) -> None:
+        """Constant expression produces equal w_i and w_j equal to the constant."""
+        p = tmp_path / "dist_all.yaml"
+        p.write_text(_DIST_FUNC_ALL_YAML)
+        model = load_model_from_yaml(p)
+        for dl in model.distributed_loads:
+            assert dl.w_i == pytest.approx(-500.0)
+            assert dl.w_j == pytest.approx(-500.0)
+
+    def test_linear_expression_evaluated_at_node_x(self, tmp_path: Path) -> None:
+        """Linear expression a*x+b is evaluated at node x positions (w_i at x=0, w_j at x=10)."""
+        p = tmp_path / "dist_linear.yaml"
+        p.write_text(_DIST_FUNC_LINEAR_YAML)
+        model = load_model_from_yaml(p)
+        dl = model.distributed_loads[0]
+        # x_i=0: 2*0 + 5 = 5.0; x_j=10: 2*10 + 5 = 25.0
+        assert dl.w_i == pytest.approx(5.0)
+        assert dl.w_j == pytest.approx(25.0)
+
+    def test_result_is_distributed_linear_type(self, tmp_path: Path) -> None:
+        """Function-based loads always resolve to DISTRIBUTED_LINEAR internally."""
+        p = tmp_path / "dist_all.yaml"
+        p.write_text(_DIST_FUNC_ALL_YAML)
+        model = load_model_from_yaml(p)
+        for dl in model.distributed_loads:
+            assert dl.load_type == LoadType.DISTRIBUTED_LINEAR
+
+    def test_invalid_element_id_raises_value_error(self, tmp_path: Path) -> None:
+        """Explicit element_ids list referencing a nonexistent ID raises ValueError."""
+        p = tmp_path / "dist_bad.yaml"
+        p.write_text(_DIST_FUNC_BAD_ELEMENT_YAML)
+        with pytest.raises(ValueError, match="unknown element_id"):
+            load_model_from_yaml(p)

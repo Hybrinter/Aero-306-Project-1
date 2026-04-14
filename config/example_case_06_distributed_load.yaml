@@ -50,19 +50,7 @@ boundary_conditions:
 loads:
   nodal: []
   distributed:
-    - element_id: 1
-      type: distributed_y
-      w_i: -1.0
-      w_j: -1.0
-    - element_id: 2
-      type: distributed_y
-      w_i: -1.0
-      w_j: -1.0
-    - element_id: 3
-      type: distributed_y
-      w_i: -1.0
-      w_j: -1.0
-    - element_id: 4
-      type: distributed_y
-      w_i: -1.0
-      w_j: -1.0
+    - element_ids: all
+      expression: "w0"
+      parameters:
+        w0: -1.0

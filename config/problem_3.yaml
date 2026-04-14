@@ -37,9 +37,11 @@ solutions:
       - {node_id: 2, type: pin}           # right support
     loads:
       distributed:
-        - {element_id: 1, type: distributed_linear, w_i: 0.7878, w_j: 0.7427}
-        - {element_id: 2, type: distributed_linear, w_i: 0.7427, w_j: 0.5872}
-        - {element_id: 3, type: distributed_linear, w_i: 0.5872, w_j: 0.0}
+        - element_ids: all
+          expression: "2*W / (pi * L) * sqrt(1 - (x / L)**2)"
+          parameters:
+            W: 25.0
+            L: 20.20
 
   - label: fine
     # 6 elements; load breakpoints at 0, L/6, L/3, L/2, 2L/3, 5L/6, L
@@ -74,9 +76,8 @@ solutions:
       - {node_id: 3, type: pin}           # right support
     loads:
       distributed:
-        - {element_id: 1, type: distributed_linear, w_i: 0.7878, w_j: 0.7768}
-        - {element_id: 2, type: distributed_linear, w_i: 0.7768, w_j: 0.7427}
-        - {element_id: 3, type: distributed_linear, w_i: 0.7427, w_j: 0.6822}
-        - {element_id: 4, type: distributed_linear, w_i: 0.6822, w_j: 0.5872}
-        - {element_id: 5, type: distributed_linear, w_i: 0.5872, w_j: 0.4356}
-        - {element_id: 6, type: distributed_linear, w_i: 0.4356, w_j: 0.0}
+        - element_ids: all
+          expression: "2*W / (pi * L) * sqrt(1 - (x / L)**2)"
+          parameters:
+            W: 25.0
+            L: 20.20
