@@ -4,6 +4,9 @@ Implements:
   - BAR element: 2 DOFs [u_i, u_j], axial stiffness EA/L
   - BEAM element: 4 DOFs [v_i, theta_i, v_j, theta_j], Euler-Bernoulli bending EI
   - FRAME element: 6 DOFs [u_i, v_i, theta_i, u_j, v_j, theta_j], combined axial+bending
+  - TRUSS element: 4 DOFs [u_i, v_i, u_j, v_j], 2D pin-jointed member in global coords
+      via coordinate transformation. Stiffness is rank-1: k = (EA/L) * outer(n, n)
+      where n = [c, s, -c, -s] and c, s are direction cosines.
 """
 from __future__ import annotations
 
@@ -101,19 +104,64 @@ def frame_stiffness_matrix(element: Element) -> NDArray[np.float64]:
     return k
 
 
+def _truss_direction_cosines(element: Element) -> tuple[float, float]:
+    """Return (c, s) direction cosines for a 2D TRUSS element.
+
+    Args:
+        element (Element): Truss element with two distinct nodes.
+
+    Returns:
+        tuple[float, float]: (c, s) where c = (xj - xi)/L and s = (yj - yi)/L.
+
+    Notes:
+        Used by both truss_stiffness_matrix (assembly) and compute_truss_axial_force
+        (post-processing) to guarantee consistent direction-cosine calculation.
+    """
+    L = element.length
+    c = (element.node_j.x - element.node_i.x) / L
+    s = (element.node_j.y - element.node_i.y) / L
+    return c, s
+
+
+def truss_stiffness_matrix(element: Element) -> NDArray[np.float64]:
+    """Assemble the 4x4 global stiffness matrix for a 2D truss (pin-jointed) element.
+
+    Args:
+        element (Element): Truss element with nodes and element_type == ElementType.TRUSS.
+
+    Returns:
+        NDArray[np.float64]: 4x4 symmetric stiffness matrix in global coordinates.
+
+    Notes:
+        DOF ordering: [u_i, v_i, u_j, v_j]. The matrix is assembled via coordinate
+        transformation: k_global = (EA/L) * outer(n, n) where the direction cosine
+        vector n = [c, s, -c, -s], c = (xj - xi)/L, s = (yj - yi)/L. This is
+        equivalent to T^T * k_local * T but avoids explicit transformation matrix
+        construction. Works for any orientation angle.
+    """
+    E = element.material.E
+    A = element.material.A
+    L = element.length
+    c, s = _truss_direction_cosines(element)
+    n = np.array([c, s, -c, -s])
+    k = (E * A / L) * np.outer(n, n)
+    return k
+
+
 def element_stiffness_matrix(element: Element) -> NDArray[np.float64]:
     """Dispatch to the appropriate stiffness matrix function based on element type.
 
     Args:
-        element (Element): Element with element_type set to BAR, BEAM, or FRAME.
+        element (Element): Element with element_type set to BAR, BEAM, FRAME, or TRUSS.
 
     Returns:
-        NDArray[np.float64]: Local stiffness matrix k of size (n_dofs x n_dofs)
-            where n_dofs is 2 for BAR, 4 for BEAM, 6 for FRAME.
+        NDArray[np.float64]: Local/global stiffness matrix k of size (n_dofs x n_dofs)
+            where n_dofs is 2 for BAR, 4 for BEAM or TRUSS, 6 for FRAME.
 
     Notes:
         Acts as a router that selects bar_stiffness_matrix, beam_stiffness_matrix,
-        or frame_stiffness_matrix based on element.element_type. Raises ValueError
+        frame_stiffness_matrix, or truss_stiffness_matrix based on element.element_type.
+        TRUSS returns the global-coordinate stiffness directly. Raises ValueError
         if element_type is unrecognized.
     """
     if element.element_type == ElementType.BAR:
@@ -122,6 +170,8 @@ def element_stiffness_matrix(element: Element) -> NDArray[np.float64]:
         return beam_stiffness_matrix(element)
     elif element.element_type == ElementType.FRAME:
         return frame_stiffness_matrix(element)
+    elif element.element_type == ElementType.TRUSS:
+        return truss_stiffness_matrix(element)
     else:
         raise ValueError(f"Unknown element type: {element.element_type}")
 
@@ -187,7 +237,8 @@ def element_load_vector(
 
     Notes:
         Acts as a router that calls beam_consistent_load_vector for BEAM and FRAME
-        elements. Raises NotImplementedError for BAR elements (no distributed loads).
+        elements. Raises NotImplementedError for BAR and TRUSS elements (distributed
+        loads not supported for axial-only members).
     """
     if element.element_type in (ElementType.BEAM, ElementType.FRAME):
         return beam_consistent_load_vector(element, load)

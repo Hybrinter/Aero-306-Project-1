@@ -49,8 +49,8 @@ def make_bar_element(E: float, A: float, L: float) -> Element:
     mat = MaterialProperties(E=E, A=A, I=0.0)
     return Element(
         id=1,
-        node_i=Node(1, 0.0),
-        node_j=Node(2, L),
+        node_i=Node(1, (0.0, 0.0)),
+        node_j=Node(2, (L, 0.0)),
         element_type=ElementType.BAR,
         material=mat,
     )
@@ -73,8 +73,8 @@ def make_beam_element(E: float, I: float, L: float) -> Element:
     mat = MaterialProperties(E=E, A=1.0, I=I)
     return Element(
         id=1,
-        node_i=Node(1, 0.0),
-        node_j=Node(2, L),
+        node_i=Node(1, (0.0, 0.0)),
+        node_j=Node(2, (L, 0.0)),
         element_type=ElementType.BEAM,
         material=mat,
     )
@@ -98,8 +98,8 @@ def make_frame_element(E: float, A: float, I: float, L: float) -> Element:
     mat = MaterialProperties(E=E, A=A, I=I)
     return Element(
         id=1,
-        node_i=Node(1, 0.0),
-        node_j=Node(2, L),
+        node_i=Node(1, (0.0, 0.0)),
+        node_j=Node(2, (L, 0.0)),
         element_type=ElementType.FRAME,
         material=mat,
     )
@@ -260,7 +260,7 @@ def test_dof_map_bijectivity(node_i_id: int, node_j_id: int) -> None:
     assume(node_i_id != node_j_id)
 
     mat = MaterialProperties(E=1e6, A=1e-2, I=0.0)
-    nodes = (Node(node_i_id, 0.0), Node(node_j_id, 1.0))
+    nodes = (Node(node_i_id, (0.0, 0.0)), Node(node_j_id, (1.0, 0.0)))
     elements = (
         Element(
             id=1,
@@ -316,7 +316,7 @@ def test_dof_partition_completeness(node_i_id: int, node_j_id: int) -> None:
     assume(node_i_id != node_j_id)
 
     mat = MaterialProperties(E=1e6, A=1e-2, I=0.0)
-    nodes = (Node(node_i_id, 0.0), Node(node_j_id, 1.0))
+    nodes = (Node(node_i_id, (0.0, 0.0)), Node(node_j_id, (1.0, 0.0)))
     elements = (
         Element(
             id=1,

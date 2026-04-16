@@ -25,12 +25,14 @@ from fea_solver.assembler import (
 from fea_solver.io_yaml import load_models_from_yaml
 from fea_solver.logging_config import configure_logging
 from fea_solver.models import SolutionSeries
+from fea_solver.models import ElementType
 from fea_solver.plotter import (
     plot_axial_displacement,
     plot_bending_moment_diagram,
     plot_rotation,
     plot_shear_force_diagram,
     plot_transverse_displacement,
+    plot_truss_axial_forces,
     show_all_plots,
 )
 from fea_solver.postprocessor import postprocess_all_elements
@@ -241,40 +243,57 @@ def main(argv: list[str] | None = None) -> int:
         safe = _sanitize_label(top_label)
         figures = []
 
-        shear_path = (save_dir / f"{safe}_shear.png") if save_dir else None
-        figures.append(
-            plot_shear_force_diagram(all_series,
-                                     title=f"Shear: {top_label}",
-                                     output_path=shear_path)
+        # Detect pure-truss problems: all elements in every solution are TRUSS
+        all_truss = all(
+            all(e.element_type == ElementType.TRUSS for e in m.mesh.elements)
+            for m in models
         )
 
-        moment_path = (save_dir / f"{safe}_moment.png") if save_dir else None
-        figures.append(
-            plot_bending_moment_diagram(all_series,
-                                        title=f"Moments: {top_label}",
-                                        output_path=moment_path)
-        )
+        if all_truss:
+            # 2D truss: draw one structure plot per solution (overlay not meaningful)
+            for sol in all_series:
+                truss_path = (save_dir / f"{_sanitize_label(sol.label)}_truss.png") if save_dir else None
+                figures.append(
+                    plot_truss_axial_forces(sol,
+                                            title=f"Truss Forces: {sol.label}",
+                                            output_path=truss_path)
+                )
+        else:
+            # 1D bar/beam/frame: overlay SFD, BMD, displacements, rotation plots
+            shear_path = (save_dir / f"{safe}_shear.png") if save_dir else None
+            figures.append(
+                plot_shear_force_diagram(all_series,
+                                         title=f"Shear: {top_label}",
+                                         output_path=shear_path)
+            )
 
-        vert_disp_path = (save_dir / f"{safe}_vertical_disp.png") if save_dir else None
-        figures.append(
-            plot_transverse_displacement(all_series,
-                                         title=f"Vertical Displacement: {top_label}",
-                                         output_path=vert_disp_path)
-        )
+            moment_path = (save_dir / f"{safe}_moment.png") if save_dir else None
+            figures.append(
+                plot_bending_moment_diagram(all_series,
+                                            title=f"Moments: {top_label}",
+                                            output_path=moment_path)
+            )
 
-        axial_disp_path = (save_dir / f"{safe}_axial_disp.png") if save_dir else None
-        figures.append(
-            plot_axial_displacement(all_series,
-                                    title=f"Axial Displacement: {top_label}",
-                                    output_path=axial_disp_path)
-        )
+            vert_disp_path = (save_dir / f"{safe}_vertical_disp.png") if save_dir else None
+            figures.append(
+                plot_transverse_displacement(all_series,
+                                             title=f"Vertical Displacement: {top_label}",
+                                             output_path=vert_disp_path)
+            )
 
-        theta_path = (save_dir / f"{safe}_rotation.png") if save_dir else None
-        figures.append(
-            plot_rotation(all_series,
-                          title=f"Rotation: {top_label}",
-                          output_path=theta_path)
-        )
+            axial_disp_path = (save_dir / f"{safe}_axial_disp.png") if save_dir else None
+            figures.append(
+                plot_axial_displacement(all_series,
+                                        title=f"Axial Displacement: {top_label}",
+                                        output_path=axial_disp_path)
+            )
+
+            theta_path = (save_dir / f"{safe}_rotation.png") if save_dir else None
+            figures.append(
+                plot_rotation(all_series,
+                              title=f"Rotation: {top_label}",
+                              output_path=theta_path)
+            )
 
         if save_dir:
             logger.info("Plots saved to %s", save_dir)

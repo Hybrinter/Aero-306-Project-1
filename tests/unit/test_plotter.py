@@ -23,7 +23,7 @@ from fea_solver.plotter import (
 def _make_model(unit_system: UnitSystem = UnitSystem.SI) -> FEAModel:
     """Build a minimal two-node beam FEAModel for plotter tests."""
     mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
-    n1, n2 = Node(1, 0.0), Node(2, 1.0)
+    n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.BEAM, material=mat)
     bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_ALL)
     return FEAModel(

@@ -14,7 +14,7 @@ from fea_solver.assembler import (
 def make_bar_model(n_nodes: int = 2) -> FEAModel:
     """Create a bar model with n_nodes nodes."""
     mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
-    nodes = tuple(Node(id=i+1, x=float(i)) for i in range(n_nodes))
+    nodes = tuple(Node(id=i+1, pos=(float(i), 0.0)) for i in range(n_nodes))
     elements = tuple(
         Element(id=i+1, node_i=nodes[i], node_j=nodes[i+1],
                 element_type=ElementType.BAR, material=mat)
@@ -29,7 +29,7 @@ def make_bar_model(n_nodes: int = 2) -> FEAModel:
 def make_beam_model(n_nodes: int = 2) -> FEAModel:
     """Create a beam model with n_nodes nodes."""
     mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
-    nodes = tuple(Node(id=i+1, x=float(i)) for i in range(n_nodes))
+    nodes = tuple(Node(id=i+1, pos=(float(i), 0.0)) for i in range(n_nodes))
     elements = tuple(
         Element(id=i+1, node_i=nodes[i], node_j=nodes[i+1],
                 element_type=ElementType.BEAM, material=mat)
@@ -173,7 +173,7 @@ class TestAssembleGlobalForceVector:
     def test_no_loads_gives_zero_vector(self) -> None:
         """Model with no loads produces zero force vector."""
         mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
-        n1, n2 = Node(1, 0.0), Node(2, 1.0)
+        n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
         elem = Element(id=1, node_i=n1, node_j=n2,
                        element_type=ElementType.BAR, material=mat)
         model = FEAModel(
@@ -189,7 +189,7 @@ class TestAssembleGlobalForceVector:
         """Distributed load produces non-zero force vector."""
         # Beam with UDL: consistent nodal forces must be non-zero
         mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
-        n1, n2 = Node(1, 0.0), Node(2, 1.0)
+        n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
         elem = Element(id=1, node_i=n1, node_j=n2,
                        element_type=ElementType.BEAM, material=mat)
         dist_load = DistributedLoad(element_id=1, load_type=LoadType.DISTRIBUTED_Y,
@@ -202,3 +202,49 @@ class TestAssembleGlobalForceVector:
         dof_map = build_dof_map(model)
         F = assemble_global_force_vector(model, dof_map)
         assert not np.allclose(F, 0.0)
+
+
+class TestTrussDofMap:
+    """Tests for TRUSS element DOF wiring in the assembler."""
+
+    def test_truss_node_has_u_and_v_dofs(self) -> None:
+        """TRUSS node gets U and V DOFs (not THETA)."""
+        mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
+        n1 = Node(1, (0.0, 0.0))
+        n2 = Node(2, (1.0, 0.0))
+        elem = Element(id=1, node_i=n1, node_j=n2,
+                       element_type=ElementType.TRUSS, material=mat)
+        model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
+                         boundary_conditions=(), nodal_loads=(), distributed_loads=(),
+                         label="truss_dof_test")
+        dof_map = build_dof_map(model)
+        assert dof_map.has_dof(1, DOFType.U)
+        assert dof_map.has_dof(1, DOFType.V)
+        assert not dof_map.has_dof(1, DOFType.THETA)
+
+    def test_truss_two_nodes_gives_four_dofs(self) -> None:
+        """Two-node truss has 4 total DOFs (U and V at each node)."""
+        mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
+        n1 = Node(1, (0.0, 0.0))
+        n2 = Node(2, (1.0, 1.0))
+        elem = Element(id=1, node_i=n1, node_j=n2,
+                       element_type=ElementType.TRUSS, material=mat)
+        model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
+                         boundary_conditions=(), nodal_loads=(), distributed_loads=(),
+                         label="truss_4dof")
+        dof_map = build_dof_map(model)
+        assert dof_map.total_dofs == 4
+
+    def test_truss_element_returns_four_dof_indices(self) -> None:
+        """TRUSS element get_element_dof_indices returns 4 indices."""
+        mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
+        n1 = Node(1, (0.0, 0.0))
+        n2 = Node(2, (1.0, 0.0))
+        elem = Element(id=1, node_i=n1, node_j=n2,
+                       element_type=ElementType.TRUSS, material=mat)
+        model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
+                         boundary_conditions=(), nodal_loads=(), distributed_loads=(),
+                         label="truss_idx_test")
+        dof_map = build_dof_map(model)
+        indices = get_element_dof_indices(1, model, dof_map)
+        assert len(indices) == 4

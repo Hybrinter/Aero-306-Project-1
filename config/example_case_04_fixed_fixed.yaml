@@ -5,10 +5,13 @@ mesh:
   nodes:
     - id: 1
       x: 0.0
+      y: 0.0
     - id: 2
       x: 1.0
+      y: 0.0
     - id: 3
       x: 2.0
+      y: 0.0
   elements:
     - id: 1
       node_i: 1

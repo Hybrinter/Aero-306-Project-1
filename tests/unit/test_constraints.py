@@ -35,7 +35,7 @@ def make_beam_dof_map(n_nodes: int = 2) -> DOFMap:
 def make_bar_model_with_bc(bc_type: BoundaryConditionType, n_nodes: int = 2) -> FEAModel:
     """Create a bar model with specified boundary condition."""
     mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
-    nodes = tuple(Node(id=i+1, x=float(i)) for i in range(n_nodes))
+    nodes = tuple(Node(id=i+1, pos=(float(i), 0.0)) for i in range(n_nodes))
     elements = tuple(
         Element(id=i+1, node_i=nodes[i], node_j=nodes[i+1],
                 element_type=ElementType.BAR, material=mat)
@@ -50,7 +50,7 @@ def make_bar_model_with_bc(bc_type: BoundaryConditionType, n_nodes: int = 2) -> 
 def make_beam_model_with_bc(bc_type: BoundaryConditionType) -> FEAModel:
     """Create a beam model with specified boundary condition."""
     mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
-    n1, n2 = Node(1, 0.0), Node(2, 1.0)
+    n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.BEAM, material=mat)
     bc = BoundaryCondition(node_id=1, bc_type=bc_type)
     load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_Y, magnitude=-1.0)

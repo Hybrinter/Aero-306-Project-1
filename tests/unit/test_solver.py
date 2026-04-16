@@ -83,7 +83,7 @@ class TestRunSolvePipeline:
         """Cantilever bar end displacement is correct."""
         # Single element bar: E=1, A=1, L=1, P=1 -> u_tip = 1
         mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
-        n1, n2 = Node(1, 0.0), Node(2, 1.0)
+        n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
         elem = Element(id=1, node_i=n1, node_j=n2,
                        element_type=ElementType.BAR, material=mat)
         bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_U)
@@ -104,7 +104,7 @@ class TestRunSolvePipeline:
     def test_returns_solution_result_type(self) -> None:
         """run_solve_pipeline returns SolutionResult."""
         mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
-        n1, n2 = Node(1, 0.0), Node(2, 1.0)
+        n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
         elem = Element(id=1, node_i=n1, node_j=n2,
                        element_type=ElementType.BAR, material=mat)
         bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_U)

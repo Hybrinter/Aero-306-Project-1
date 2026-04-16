@@ -10,7 +10,22 @@
       "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_plotter.py tests/unit/test_io_yaml.py::TestLoadModelsFromYaml tests/integration/test_multi_solution.py -x --tb=short -q)",
       "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_io_yaml.py -v)",
       "Bash(.venv/Scripts/python.exe -m pytest tests/ -v)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_elements.py::TestNodePos -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/ -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/integration/ -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short -q)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/integration/test_multi_solution.py -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_assembler.py::TestTrussDofMap -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/ -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_elements.py::TestTrussStiffnessMatrix -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_io_yaml.py::TestTrussYamlParsing -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_io_yaml.py::TestTrussYamlParsing::test_truss_element_type_parsed -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_postprocessor.py::TestComputeTrussAxialForce tests/unit/test_postprocessor.py::TestPostprocessTrussElements -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/integration/test_truss_cases.py -v)",
+      "Bash(.venv/Scripts/python.exe main.py config/problem_5.yaml --no-plot)",
+      "Bash(.venv/Scripts/python.exe *)"
     ]
   }
 }

@@ -25,8 +25,8 @@ solutions:
   - label: coarse
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 1.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 1.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
     materials:
@@ -39,9 +39,9 @@ solutions:
   - label: fine
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 0.5}
-        - {id: 3, x: 1.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 0.5, y: 0.0}
+        - {id: 3, x: 1.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: steel}

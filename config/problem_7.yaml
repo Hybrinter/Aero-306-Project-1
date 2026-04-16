@@ -1,0 +1,78 @@
+# Problem 7: 2D Beam-Like Truss (9 nodes, mm coordinates)
+# E = 3003 MPa (N/mm^2), A = 1 mm^2, I = 1/12 mm^4 (not used for truss)
+# F = 50 N downward
+#
+# Node layout (coordinates in mm):
+#   1(0,0)---2(10,0)---3(20,0)
+#    \  \   /   \   /   \
+#     7(5,-5)  8(15,-5)  9(25,-5)
+#    /   /   \  /   \  /
+#   4(0,-10)--5(10,-10)-6(20,-10)
+#
+# Upper chord: 1-2, 2-3
+# Lower chord: 4-5, 5-6
+# Diagonals connecting levels (Warren truss pattern):
+#   1-7, 7-2, 2-8, 8-3
+#   4-7, 7-5, 5-8, 8-6
+# Verticals (if any): 1-4, 3-6 (end panels)
+# Right extension to node 9 (25,-5):
+#   3-9, 6-9 (TODO: verify exact right boundary elements)
+#
+# TODO: Verify element connectivity from problem image.
+#       The exact connectivity pattern needs confirmation.
+# TODO: Verify load location (node 8 or 9 per image).
+# TODO: Verify boundary conditions (pin at node 1, roller at node 4 per image).
+label: "problem_7"
+unit_system: empirical   # all values in N and mm (E in N/mm^2 = MPa)
+
+mesh:
+  nodes:
+    # Top chord (y = 0 mm)
+    - {id: 1, x:  0.0, y:   0.0}
+    - {id: 2, x: 10.0, y:   0.0}
+    - {id: 3, x: 20.0, y:   0.0}
+    # Bottom chord (y = -10 mm)
+    - {id: 4, x:  0.0, y: -10.0}
+    - {id: 5, x: 10.0, y: -10.0}
+    - {id: 6, x: 20.0, y: -10.0}
+    # Mid-height nodes (y = -5 mm), staggered at x = 5, 15, 25
+    - {id: 7, x:  5.0, y:  -5.0}
+    - {id: 8, x: 15.0, y:  -5.0}
+    - {id: 9, x: 25.0, y:  -5.0}
+  elements:
+    # Upper chord
+    - {id:  1, node_i: 1, node_j: 2, type: truss, material: steel}
+    - {id:  2, node_i: 2, node_j: 3, type: truss, material: steel}
+    # Lower chord
+    - {id:  3, node_i: 4, node_j: 5, type: truss, material: steel}
+    - {id:  4, node_i: 5, node_j: 6, type: truss, material: steel}
+    # Left end verticals
+    - {id:  5, node_i: 1, node_j: 4, type: truss, material: steel}
+    # Warren diagonals to node 7 (5,-5)
+    - {id:  6, node_i: 1, node_j: 7, type: truss, material: steel}
+    - {id:  7, node_i: 4, node_j: 7, type: truss, material: steel}
+    - {id:  8, node_i: 7, node_j: 2, type: truss, material: steel}
+    - {id:  9, node_i: 7, node_j: 5, type: truss, material: steel}
+    # Warren diagonals to node 8 (15,-5)
+    - {id: 10, node_i: 2, node_j: 8, type: truss, material: steel}
+    - {id: 11, node_i: 5, node_j: 8, type: truss, material: steel}
+    - {id: 12, node_i: 8, node_j: 3, type: truss, material: steel}
+    - {id: 13, node_i: 8, node_j: 6, type: truss, material: steel}
+    # Right extension to node 9 (25,-5)
+    - {id: 14, node_i: 3, node_j: 9, type: truss, material: steel}
+    - {id: 15, node_i: 6, node_j: 9, type: truss, material: steel}
+
+materials:
+  steel:
+    E: 3003.0    # N/mm^2 = MPa (given: E = 3003 MPa)
+    A: 1.0       # mm^2
+    I: 0.0       # mm^4 (not used for truss; problem gives I=1/12 mm^4 but it's irrelevant)
+
+boundary_conditions:
+  - {node_id: 1, type: pin}       # pin: fixed U and V  (TODO: verify)
+  - {node_id: 4, type: roller}    # roller: fixed V      (TODO: verify)
+
+loads:
+  nodal:
+    - {node_id: 8, type: point_force_y, magnitude: -50.0}   # F = 50 N downward (TODO: verify node)
+  distributed: []

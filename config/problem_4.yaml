@@ -17,11 +17,11 @@ solutions:
     # 4 elements; nodes at 0, L/4, L/2, 3L/4, L
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 5.0075}        # L/4 = 20.03/4
-        - {id: 3, x: 10.015}        # L/2
-        - {id: 4, x: 15.0225}       # 3L/4
-        - {id: 5, x: 20.03}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 5.0075, y: 0.0}        # L/4 = 20.03/4
+        - {id: 3, x: 10.015, y: 0.0}        # L/2
+        - {id: 4, x: 15.0225, y: 0.0}       # 3L/4
+        - {id: 5, x: 20.03, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: section}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: section}
@@ -45,15 +45,15 @@ solutions:
     # 8 elements; midpoints inserted between all coarse nodes
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 2.50375}       # L/8
-        - {id: 3, x: 5.0075}        # L/4 -- pin support
-        - {id: 4, x: 7.51125}       # 3L/8
-        - {id: 5, x: 10.015}        # L/2 -- moment load
-        - {id: 6, x: 12.51875}      # 5L/8
-        - {id: 7, x: 15.0225}       # 3L/4 -- pin support
-        - {id: 8, x: 17.52625}      # 7L/8
-        - {id: 9, x: 20.03}         # L
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 2.50375, y: 0.0}       # L/8
+        - {id: 3, x: 5.0075, y: 0.0}        # L/4 -- pin support
+        - {id: 4, x: 7.51125, y: 0.0}       # 3L/8
+        - {id: 5, x: 10.015, y: 0.0}        # L/2 -- moment load
+        - {id: 6, x: 12.51875, y: 0.0}      # 5L/8
+        - {id: 7, x: 15.0225, y: 0.0}       # 3L/4 -- pin support
+        - {id: 8, x: 17.52625, y: 0.0}      # 7L/8
+        - {id: 9, x: 20.03, y: 0.0}         # L
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: section}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: section}

@@ -14,8 +14,10 @@ mesh:
   nodes:
     - id: 1
       x: 0.0
+      y: 0.0
     - id: 2
       x: 1.0
+      y: 0.0
   elements:
     - id: 1
       node_i: 1
@@ -44,8 +46,10 @@ mesh:
   nodes:
     - id: 1
       x: 0.0
+      y: 0.0
     - id: 2
       x: 1.0
+      y: 0.0
   elements:
     - id: 1
       node_i: 1
@@ -174,8 +178,8 @@ solutions:
   - label: "coarse"
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 1.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 1.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
     materials:
@@ -188,9 +192,9 @@ solutions:
   - label: "fine"
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 0.5}
-        - {id: 3, x: 1.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 0.5, y: 0.0}
+        - {id: 3, x: 1.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: steel}
@@ -211,8 +215,8 @@ solutions:
     description: "This field should be silently ignored by Pydantic v2"
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 1.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 1.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
     materials:
@@ -229,8 +233,8 @@ solutions:
   - label: "coarse"
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 12.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 12.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: alum}
     materials:
@@ -243,9 +247,9 @@ solutions:
   - label: "fine"
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 6.0}
-        - {id: 3, x: 12.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 6.0, y: 0.0}
+        - {id: 3, x: 12.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: alum}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: alum}
@@ -358,9 +362,9 @@ _DIST_FUNC_ALL_YAML = """\
 label: "test_dist_all"
 mesh:
   nodes:
-    - {id: 1, x: 0.0}
-    - {id: 2, x: 1.0}
-    - {id: 3, x: 2.0}
+    - {id: 1, x: 0.0, y: 0.0}
+    - {id: 2, x: 1.0, y: 0.0}
+    - {id: 3, x: 2.0, y: 0.0}
   elements:
     - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
     - {id: 2, node_i: 2, node_j: 3, type: beam, material: steel}
@@ -381,9 +385,9 @@ _DIST_FUNC_EXPLICIT_YAML = """\
 label: "test_dist_explicit"
 mesh:
   nodes:
-    - {id: 1, x: 0.0}
-    - {id: 2, x: 1.0}
-    - {id: 3, x: 2.0}
+    - {id: 1, x: 0.0, y: 0.0}
+    - {id: 2, x: 1.0, y: 0.0}
+    - {id: 3, x: 2.0, y: 0.0}
   elements:
     - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
     - {id: 2, node_i: 2, node_j: 3, type: beam, material: steel}
@@ -404,8 +408,8 @@ _DIST_FUNC_LINEAR_YAML = """\
 label: "test_dist_linear"
 mesh:
   nodes:
-    - {id: 1, x: 0.0}
-    - {id: 2, x: 10.0}
+    - {id: 1, x: 0.0, y: 0.0}
+    - {id: 2, x: 10.0, y: 0.0}
   elements:
     - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
 materials:
@@ -425,8 +429,8 @@ _DIST_FUNC_BAD_ELEMENT_YAML = """\
 label: "test_dist_bad"
 mesh:
   nodes:
-    - {id: 1, x: 0.0}
-    - {id: 2, x: 1.0}
+    - {id: 1, x: 0.0, y: 0.0}
+    - {id: 2, x: 1.0, y: 0.0}
   elements:
     - {id: 1, node_i: 1, node_j: 2, type: beam, material: steel}
 materials:
@@ -494,3 +498,52 @@ class TestDistributedLoadFunction:
         p.write_text(_DIST_FUNC_BAD_ELEMENT_YAML)
         with pytest.raises(ValueError, match="unknown element_id"):
             load_model_from_yaml(p)
+
+
+_MINIMAL_TRUSS_YAML = """\
+label: "test_truss"
+mesh:
+  nodes:
+    - {id: 1, x: 0.0, y: 0.0}
+    - {id: 2, x: 3.0, y: 4.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 2, type: truss, material: steel}
+materials:
+  steel:
+    E: 200.0e9
+    A: 0.01
+    I: 0.0
+boundary_conditions:
+  - {node_id: 1, type: pin}
+loads:
+  nodal:
+    - {node_id: 2, type: point_force_x, magnitude: 1000.0}
+"""
+
+
+class TestTrussYamlParsing:
+    """Tests for TRUSS element type in YAML parsing."""
+
+    def test_truss_element_type_parsed(self, tmp_path: Path) -> None:
+        """YAML with type: truss produces ElementType.TRUSS."""
+        p = tmp_path / "truss.yaml"
+        p.write_text(_MINIMAL_TRUSS_YAML)
+        model = load_model_from_yaml(p)
+        assert model.mesh.elements[0].element_type == ElementType.TRUSS
+
+    def test_truss_node_pos_parsed(self, tmp_path: Path) -> None:
+        """Node x and y coordinates are parsed into pos tuple correctly."""
+        p = tmp_path / "truss.yaml"
+        p.write_text(_MINIMAL_TRUSS_YAML)
+        model = load_model_from_yaml(p)
+        n2 = next(n for n in model.mesh.nodes if n.id == 2)
+        assert n2.x == pytest.approx(3.0)
+        assert n2.y == pytest.approx(4.0)
+
+    def test_truss_element_length_3_4_5(self, tmp_path: Path) -> None:
+        """Element length for a 3-4-5 truss is 5.0."""
+        p = tmp_path / "truss.yaml"
+        p.write_text(_MINIMAL_TRUSS_YAML)
+        model = load_model_from_yaml(p)
+        import math
+        assert math.isclose(model.mesh.elements[0].length, 5.0, rel_tol=1e-12)

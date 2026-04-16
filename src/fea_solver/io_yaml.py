@@ -88,6 +88,7 @@ _ELEMENT_TYPE_MAP: dict[str, ElementType] = {
     "bar":   ElementType.BAR,
     "beam":  ElementType.BEAM,
     "frame": ElementType.FRAME,
+    "truss": ElementType.TRUSS,
 }
 
 _BC_TYPE_MAP: dict[str, BoundaryConditionType] = {
@@ -196,15 +197,19 @@ class _NodeSchema(BaseModel):
 
     Args:
         id (int): Unique node identifier. Must be a positive integer.
-        x (float): Position along the beam axis in metres.
+        x (float): Global x-coordinate in the YAML input length unit.
+        y (float): Global y-coordinate in the YAML input length unit.
+            Required for all node entries; use 0.0 for 1D (bar/beam/frame) problems.
 
     Notes:
         Pydantic coerces numeric strings to int/float automatically.
         Uniqueness is enforced later in _schema_to_model.
+        Both x and y are required fields; there is no default for y.
     """
 
     id: int
     x: float
+    y: float
 
 
 class _MaterialSchema(BaseModel):
@@ -487,7 +492,10 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
     conv = UnitConverter(unit_system=unit_system, units=units_spec)
 
     # --- Nodes ---
-    nodes_list: list[Node] = [Node(id=n.id, x=conv.convert(n.x, "length")) for n in schema.mesh.nodes]
+    nodes_list: list[Node] = [
+        Node(id=n.id, pos=(conv.convert(n.x, "length"), conv.convert(n.y, "length")))
+        for n in schema.mesh.nodes
+    ]
     node_ids_list = [n.id for n in nodes_list]
     if len(node_ids_list) != len(set(node_ids_list)):
         raise ValueError(f"Duplicate node IDs detected: {node_ids_list}")

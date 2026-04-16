@@ -18,10 +18,10 @@ solutions:
     # 3 elements of 120 in each
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 120.0}
-        - {id: 3, x: 240.0}
-        - {id: 4, x: 360.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 120.0, y: 0.0}
+        - {id: 3, x: 240.0, y: 0.0}
+        - {id: 4, x: 360.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: section}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: section}
@@ -46,13 +46,13 @@ solutions:
     # 6 elements of 60 in each
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 60.0}
-        - {id: 3, x: 120.0}
-        - {id: 4, x: 180.0}
-        - {id: 5, x: 240.0}
-        - {id: 6, x: 300.0}
-        - {id: 7, x: 360.0}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 60.0, y: 0.0}
+        - {id: 3, x: 120.0, y: 0.0}
+        - {id: 4, x: 180.0, y: 0.0}
+        - {id: 5, x: 240.0, y: 0.0}
+        - {id: 6, x: 300.0, y: 0.0}
+        - {id: 7, x: 360.0, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: section}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: section}

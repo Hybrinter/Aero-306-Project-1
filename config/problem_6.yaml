@@ -1,0 +1,64 @@
+# Problem 6: 2D Bridge (Pratt) Truss
+# 8 nodes, 13 members, EA = 2020, A = 1 => E = 2020
+# F = 50 downward at lower chord nodes 6, 7, 8
+#
+# Node layout (y up, top chord at y=0, lower chord at y=-10):
+#   1(0,0)--2(10,0)--3(20,0)--4(30,0)--5(40,0)
+#             \       /  \       /  \       /
+#            6(10,-10)  7(20,-10)  8(30,-10)
+#
+# Upper chord: 1-2, 2-3, 3-4, 4-5
+# Lower chord: 6-7, 7-8
+# Verticals:   2-6, 3-7, 4-8
+# Diagonals:   1-6, 6-3, 7-4, 8-5
+#
+# Supports: pin at node 1, roller (fixed_v) at node 5
+# Total: 13 members + 3 reactions = 2*8 = 16 (statically determinate)
+label: "problem_6"
+unit_system: empirical
+
+mesh:
+  nodes:
+    - {id: 1, x:  0.0, y:   0.0}
+    - {id: 2, x: 10.0, y:   0.0}
+    - {id: 3, x: 20.0, y:   0.0}
+    - {id: 4, x: 30.0, y:   0.0}
+    - {id: 5, x: 40.0, y:   0.0}
+    - {id: 6, x: 10.0, y: -10.0}
+    - {id: 7, x: 20.0, y: -10.0}
+    - {id: 8, x: 30.0, y: -10.0}
+  elements:
+    # Upper chord
+    - {id:  1, node_i: 1, node_j: 2, type: truss, material: steel}
+    - {id:  2, node_i: 2, node_j: 3, type: truss, material: steel}
+    - {id:  3, node_i: 3, node_j: 4, type: truss, material: steel}
+    - {id:  4, node_i: 4, node_j: 5, type: truss, material: steel}
+    # Lower chord
+    - {id:  5, node_i: 6, node_j: 7, type: truss, material: steel}
+    - {id:  6, node_i: 7, node_j: 8, type: truss, material: steel}
+    # Verticals
+    - {id:  7, node_i: 2, node_j: 6, type: truss, material: steel}
+    - {id:  8, node_i: 3, node_j: 7, type: truss, material: steel}
+    - {id:  9, node_i: 4, node_j: 8, type: truss, material: steel}
+    # Diagonals (Pratt: tension diagonals slope toward center)
+    - {id: 10, node_i: 1, node_j: 6, type: truss, material: steel}
+    - {id: 11, node_i: 6, node_j: 3, type: truss, material: steel}
+    - {id: 12, node_i: 7, node_j: 4, type: truss, material: steel}
+    - {id: 13, node_i: 8, node_j: 5, type: truss, material: steel}
+
+materials:
+  steel:
+    E: 2020.0   # E = EA / A = 2020 / 1 = 2020
+    A: 1.0
+    I: 0.0      # not used for truss
+
+boundary_conditions:
+  - {node_id: 1, type: pin}       # pin: fixed U and V
+  - {node_id: 5, type: roller}    # roller: fixed V only
+
+loads:
+  nodal:
+    - {node_id: 6, type: point_force_y, magnitude: -50.0}
+    - {node_id: 7, type: point_force_y, magnitude: -50.0}
+    - {node_id: 8, type: point_force_y, magnitude: -50.0}
+  distributed: []

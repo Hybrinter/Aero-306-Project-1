@@ -30,6 +30,22 @@ logger = logging.getLogger(__name__)
 _console = Console()
 
 
+def _mesh_is_2d(model: FEAModel) -> bool:
+    """Return True if any node has a non-zero y-coordinate (2D truss problem).
+
+    Args:
+        model (FEAModel): The finite element model.
+
+    Returns:
+        bool: True if the mesh spans 2D space (any node.y != 0.0), False for 1D.
+
+    Notes:
+        Used to decide whether to show the y-coordinate column in output tables.
+        1D bar/beam/frame problems have all nodes at y=0.0.
+    """
+    return any(n.y != 0.0 for n in model.mesh.nodes)
+
+
 def _lbl(model: FEAModel) -> dict[str, str]:
     """Return the unit-label dictionary for the model's canonical unit system.
 
@@ -64,9 +80,12 @@ def print_dof_table(model: FEAModel, dof_map: DOFMap) -> None:
         Rows sorted by global DOF index.
     """
     lbl = _lbl(model)
+    has_y = _mesh_is_2d(model)
     table = Table(title=f"DOF Table -- {model.label}", show_header=True, header_style="bold cyan")
     table.add_column("Node ID", justify="right")
     table.add_column(f"x [{lbl['length']}]", justify="right")
+    if has_y:
+        table.add_column(f"y [{lbl['length']}]", justify="right")
     table.add_column("DOF Type", justify="center")
     table.add_column("Global Index", justify="right")
 
@@ -74,12 +93,11 @@ def print_dof_table(model: FEAModel, dof_map: DOFMap) -> None:
 
     for (node_id, dof_type), idx in sorted(dof_map.mapping.items(), key=lambda kv: kv[1]):
         node = nodes_by_id[node_id]
-        table.add_row(
-            str(node_id),
-            f"{node.x:.4f}",
-            dof_type.value,
-            str(idx),
-        )
+        row = [str(node_id), f"{node.x:.4f}"]
+        if has_y:
+            row.append(f"{node.y:.4f}")
+        row += [dof_type.value, str(idx)]
+        table.add_row(*row)
 
     _console.print(table)
 
@@ -103,10 +121,13 @@ def print_nodal_results(result: SolutionResult) -> None:
     u = result.displacements
 
     lbl = _lbl(model)
+    has_y = _mesh_is_2d(model)
     table = Table(title=f"Nodal Results -- {model.label}", show_header=True,
                   header_style="bold green")
     table.add_column("Node ID", justify="right")
     table.add_column(f"x [{lbl['length']}]", justify="right")
+    if has_y:
+        table.add_column(f"y [{lbl['length']}]", justify="right")
     table.add_column(f"u [{lbl['displacement']}]", justify="right")
     table.add_column(f"v [{lbl['displacement']}]", justify="right")
     table.add_column("theta [rad]", justify="right")
@@ -118,7 +139,11 @@ def print_nodal_results(result: SolutionResult) -> None:
                  if dof_map.has_dof(node.id, DOFType.V) else "--")
         t_val = (f"{u[dof_map.index(node.id, DOFType.THETA)]:.6e}"
                  if dof_map.has_dof(node.id, DOFType.THETA) else "--")
-        table.add_row(str(node.id), f"{node.x:.4f}", u_val, v_val, t_val)
+        row = [str(node.id), f"{node.x:.4f}"]
+        if has_y:
+            row.append(f"{node.y:.4f}")
+        row += [u_val, v_val, t_val]
+        table.add_row(*row)
 
     _console.print(table)
 
@@ -152,13 +177,9 @@ def print_reaction_forces(result: SolutionResult) -> None:
     table.add_column("Global Index", justify="right")
     table.add_column(f"Reaction [{lbl['force']} or {lbl['moment']}]", justify="right")
 
-    nodes_by_id = {n.id: n for n in model.mesh.nodes}
+    reverse_mapping = {idx: key for key, idx in dof_map.mapping.items()}
     for i, global_idx in enumerate(constrained):
-        # Find (node_id, dof_type) for this global index
-        result_tuple = next(
-            (nid_dof for nid_dof, idx in dof_map.mapping.items() if idx == global_idx),
-            None
-        )
+        result_tuple = reverse_mapping.get(global_idx)
         if result_tuple is None:
             raise KeyError(f"No DOF found for global index {global_idx}")
         node_id, dof_type = result_tuple
@@ -242,9 +263,13 @@ def generate_report(
         "--- Nodal Displacements ---",
     ]
 
+    has_y = _mesh_is_2d(model)
     u = result.displacements
     for node in sorted(model.mesh.nodes, key=lambda n: n.id):
-        parts: list[str] = [f"  Node {node.id} (x={node.x:.3f} {lbl['length']}):"]
+        coord = f"x={node.x:.3f}"
+        if has_y:
+            coord += f", y={node.y:.3f}"
+        parts: list[str] = [f"  Node {node.id} ({coord} {lbl['length']}):"]
         if dof_map.has_dof(node.id, DOFType.U):
             parts.append(f"u={u[dof_map.index(node.id, DOFType.U)]:.6e} {lbl['displacement']}")
         if dof_map.has_dof(node.id, DOFType.V):

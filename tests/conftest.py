@@ -51,8 +51,8 @@ def unit_beam_material() -> MaterialProperties:
 @pytest.fixture
 def two_node_bar_model(unit_bar_material: MaterialProperties) -> FEAModel:
     """Single bar element: node 1 at x=0, node 2 at x=1. Fixed at node 1."""
-    n1 = Node(id=1, x=0.0)
-    n2 = Node(id=2, x=1.0)
+    n1 = Node(id=1, pos=(0.0, 0.0))
+    n2 = Node(id=2, pos=(1.0, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2,
                    element_type=ElementType.BAR, material=unit_bar_material)
     mesh = Mesh(nodes=(n1, n2), elements=(elem,))
@@ -65,8 +65,8 @@ def two_node_bar_model(unit_bar_material: MaterialProperties) -> FEAModel:
 @pytest.fixture
 def cantilever_beam_model(unit_beam_material: MaterialProperties) -> FEAModel:
     """Single beam element cantilever: fixed at node 1, tip load at node 2."""
-    n1 = Node(id=1, x=0.0)
-    n2 = Node(id=2, x=1.0)
+    n1 = Node(id=1, pos=(0.0, 0.0))
+    n2 = Node(id=2, pos=(1.0, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2,
                    element_type=ElementType.BEAM, material=unit_beam_material)
     mesh = Mesh(nodes=(n1, n2), elements=(elem,))

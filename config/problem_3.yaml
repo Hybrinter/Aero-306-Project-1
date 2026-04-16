@@ -19,10 +19,10 @@ solutions:
     # f(2L/3) = 0.7878*sqrt(5/9) = 0.5872 lb/ft
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 6.7333}       # L/3 = 20.20/3
-        - {id: 3, x: 13.4667}      # 2L/3
-        - {id: 4, x: 20.20}
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 6.7333, y: 0.0}       # L/3 = 20.20/3
+        - {id: 3, x: 13.4667, y: 0.0}      # 2L/3
+        - {id: 4, x: 20.20, y: 0.0}
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: section}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: section}
@@ -52,13 +52,13 @@ solutions:
     # f(5L/6) = 0.7878*sqrt(11/36) = 0.4356 lb/ft
     mesh:
       nodes:
-        - {id: 1, x: 0.0}
-        - {id: 2, x: 3.3667}       # L/6 = 20.20/6
-        - {id: 3, x: 6.7333}       # L/3
-        - {id: 4, x: 10.10}        # L/2
-        - {id: 5, x: 13.4667}      # 2L/3
-        - {id: 6, x: 16.8333}      # 5L/6
-        - {id: 7, x: 20.20}        # L
+        - {id: 1, x: 0.0, y: 0.0}
+        - {id: 2, x: 3.3667, y: 0.0}       # L/6 = 20.20/6
+        - {id: 3, x: 6.7333, y: 0.0}       # L/3
+        - {id: 4, x: 10.10, y: 0.0}        # L/2
+        - {id: 5, x: 13.4667, y: 0.0}      # 2L/3
+        - {id: 6, x: 16.8333, y: 0.0}      # 5L/6
+        - {id: 7, x: 20.20, y: 0.0}        # L
       elements:
         - {id: 1, node_i: 1, node_j: 2, type: beam, material: section}
         - {id: 2, node_i: 2, node_j: 3, type: beam, material: section}

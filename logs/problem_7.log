@@ -1,0 +1,90 @@
+2026-04-15 16:41:32 [INFO    ] fea_solver: Logging initialized for case: problem_7
+2026-04-15 16:41:32 [INFO    ] fea_solver: === FEA Solver started: problem_7 ===
+2026-04-15 16:41:32 [INFO    ] fea_solver: Config: E:\Classes\Aero-306-Project-1\config\problem_7.yaml
+2026-04-15 16:41:32 [INFO    ] fea_solver: Solutions: 1
+2026-04-15 16:41:32 [INFO    ] fea_solver: --- Solving: problem_7 ---
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.assembler: Built DOF map: 18 total DOFs
+2026-04-15 16:41:32 [INFO    ] fea_solver: Assembling global stiffness matrix (18x18)...
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.assembler: Assembled global K: shape (18, 18)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.assembler: Nodal load -50 applied at node 8 DOF v (global 15)
+2026-04-15 16:41:32 [INFO    ] fea_solver: Solving displacement system...
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.constraints: Constrained DOFs: [0, 1, 7]
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.constraints: Constrained DOFs: [0, 1, 7]
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.constraints: Free DOFs: [2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.constraints: Reduced system: 15 free DOFs, 3 constrained DOFs
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.solver: K_ff condition number: 2.819e+16
+2026-04-15 16:41:32 [WARNING ] fea_solver.solver: K_ff is nearly singular (cond=2.819e+16) -- check BCs
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.solver: Max displacement: 5.277656e+14
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.solver: Reactions: [-8. 16.  0.]
+2026-04-15 16:41:32 [INFO    ] fea_solver.solver: Solve complete: max|u|=5.2777e+14, max|R|=1.6000e+01
+2026-04-15 16:41:32 [INFO    ] fea_solver: Post-processing element internal forces...
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 1: N = -7.7320e+00 (c=1.0000, s=0.0000)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 1
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 2: N = -1.8667e+01 (c=1.0000, s=0.0000)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 2
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 3: N = 0.0000e+00 (c=1.0000, s=0.0000)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 3
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 4: N = 1.8769e+01 (c=1.0000, s=0.0000)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 4
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 5: N = 0.0000e+00 (c=0.0000, s=-1.0000)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 5
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 6: N = 1.9907e+01 (c=0.7071, s=-0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 6
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 7: N = 0.0000e+00 (c=0.7071, s=0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 7
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 8: N = -6.6358e+00 (c=0.7071, s=0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 8
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 9: N = 2.6543e+01 (c=0.7071, s=-0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 9
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 10: N = 1.3272e+01 (c=0.7071, s=-0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 10
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 11: N = -1.3272e+01 (c=0.7071, s=0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 11
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 12: N = 1.3272e+01 (c=0.7071, s=0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 12
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 13: N = 0.0000e+00 (c=0.7071, s=-0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 13
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 14: N = -1.3272e+01 (c=0.7071, s=-0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 14
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Truss element 15: N = -6.6358e+00 (c=0.7071, s=0.7071)
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.postprocessor: Post-processed element 15
+2026-04-15 16:41:32 [DEBUG   ] fea_solver.constraints: Constrained DOFs: [0, 1, 7]
+2026-04-15 16:41:32 [INFO    ] fea_solver.reporter: Report generated:
+============================================================
+FEA SOLVER REPORT -- problem_7
+Unit system: empirical
+============================================================
+Nodes: 9
+Elements: 15
+Total DOFs: 18
+
+--- Nodal Displacements ---
+  Node 1 (x=0.000, y=0.000 in): u=0.000000e+00 in v=0.000000e+00 in
+  Node 2 (x=10.000, y=0.000 in): u=-2.574754e-02 in v=2.111062e+14 in
+  Node 3 (x=20.000, y=0.000 in): u=-8.790760e-02 in v=4.222125e+14 in
+  Node 4 (x=0.000, y=-10.000 in): u=2.111062e+14 in v=0.000000e+00 in
+  Node 5 (x=10.000, y=-10.000 in): u=2.111062e+14 in v=2.111062e+14 in
+  Node 6 (x=20.000, y=-10.000 in): u=2.111062e+14 in v=4.222125e+14 in
+  Node 7 (x=5.000, y=-5.000 in): u=1.055531e+14 in v=1.055531e+14 in
+  Node 8 (x=15.000, y=-5.000 in): u=1.055531e+14 in v=3.166593e+14 in
+  Node 9 (x=25.000, y=-5.000 in): u=1.055531e+14 in v=5.277656e+14 in
+
+--- Element Forces ---
+  Elem 1: N=-7.7320e+00 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 2: N=-1.8667e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 3: N=0.0000e+00 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 4: N=1.8769e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 5: N=0.0000e+00 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 6: N=1.9907e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 7: N=0.0000e+00 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 8: N=-6.6358e+00 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 9: N=2.6543e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 10: N=1.3272e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 11: N=-1.3272e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 12: N=1.3272e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 13: N=0.0000e+00 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 14: N=-1.3272e+01 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+  Elem 15: N=-6.6358e+00 lb, |V|_max=0.0000e+00 lb, |M|_max=0.0000e+00 in-lb
+2026-04-15 16:41:32 [INFO    ] fea_solver.plotter: Truss plot saved to outputs\problem_7_truss.png
+2026-04-15 16:41:32 [INFO    ] fea_solver: Plots saved to outputs
+2026-04-15 16:41:32 [INFO    ] fea_solver: === FEA Solver complete ===

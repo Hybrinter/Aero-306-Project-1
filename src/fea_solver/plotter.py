@@ -17,6 +17,7 @@ Provides:
   - plot_transverse_displacement:   v(x) with physical units on both axes
   - plot_axial_displacement:        u(x) with physical units on both axes
   - plot_rotation:                  theta(x) in radians
+  - plot_truss_axial_forces:        2D wireframe with color-coded member forces (tension/compression)
   - show_all_plots:                 plt.show() wrapper
 
 _SERIES_COLORS:         List of hex color strings cycled across multiple series.
@@ -32,6 +33,7 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 
 from fea_solver.models import ElementResult, FEAModel, SolutionSeries
@@ -456,6 +458,79 @@ def plot_rotation(
     if output_path is not None:
         fig.savefig(output_path, dpi=150, bbox_inches="tight")
         logger.info("Rotation plot saved to %s", output_path)
+
+    return fig
+
+
+def plot_truss_axial_forces(
+    sol: SolutionSeries,
+    title: str = "Truss Member Forces",
+    output_path: Path | None = None,
+) -> plt.Figure:
+    """Plot 2D truss geometry with color-coded member axial forces.
+
+    Members in tension are drawn in blue; members in compression are drawn in red.
+    Each member is annotated with its axial force value at midpoint.
+
+    Args:
+        sol (SolutionSeries): Single solution bundle containing element results and model.
+        title (str): Plot title. Default "Truss Member Forces".
+        output_path (Path | None): If provided, save figure to this path as PNG.
+
+    Returns:
+        plt.Figure: The matplotlib Figure.
+
+    Notes:
+        Node coordinates are taken from model.mesh nodes. Positive axial force (tension)
+        produces blue members; negative (compression) produces red members.
+        If output_path is provided, saves figure at 150 dpi.
+    """
+    model = sol.model
+    lbl = _unit_labels(model)
+
+    # Build element id -> ElementResult lookup
+    result_by_id = {er.element_id: er for er in sol.element_results}
+    nodes_by_id = {n.id: n for n in model.mesh.nodes}
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    for element in model.mesh.elements:
+        n_i = nodes_by_id[element.node_i.id]
+        n_j = nodes_by_id[element.node_j.id]
+        er = result_by_id.get(element.id)
+        N = er.axial_force if er is not None else 0.0
+
+        color = "#1f77b4" if N >= 0.0 else "#d62728"  # blue=tension, red=compression
+        ax.plot([n_i.x, n_j.x], [n_i.y, n_j.y], color=color, linewidth=2.0)
+
+        # Annotate midpoint with force value
+        mid_x = (n_i.x + n_j.x) / 2.0
+        mid_y = (n_i.y + n_j.y) / 2.0
+        ax.text(mid_x, mid_y, f"{N:.3g}", fontsize=7, ha="center", va="bottom",
+                color=color)
+
+    # Draw nodes
+    for node in model.mesh.nodes:
+        ax.plot(node.x, node.y, "ko", markersize=4, zorder=5)
+        ax.text(node.x, node.y, f" {node.id}", fontsize=8, va="bottom")
+
+    # Legend entries for tension/compression
+    legend_elements = [
+        Line2D([0], [0], color="#1f77b4", linewidth=2, label="Tension (N > 0)"),
+        Line2D([0], [0], color="#d62728", linewidth=2, label="Compression (N < 0)"),
+    ]
+    ax.legend(handles=legend_elements, loc="best", fontsize=8)
+
+    ax.set_xlabel(f"x [{lbl['length']}]")
+    ax.set_ylabel(f"y [{lbl['length']}]")
+    ax.set_title(title)
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        logger.info("Truss plot saved to %s", output_path)
 
     return fig
 

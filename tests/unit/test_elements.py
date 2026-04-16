@@ -1,5 +1,6 @@
 """Tests for element stiffness matrices and load vectors -- TDD first."""
 from __future__ import annotations
+import math
 import numpy as np
 import pytest
 from fea_solver.models import (
@@ -7,25 +8,66 @@ from fea_solver.models import (
 )
 from fea_solver.elements import (
     bar_stiffness_matrix, beam_stiffness_matrix, frame_stiffness_matrix,
+    truss_stiffness_matrix,
     element_stiffness_matrix, beam_consistent_load_vector, element_load_vector,
 )
+
+
+class TestNodePos:
+    """Tests for Node.pos tuple and x/y property accessors."""
+
+    def test_node_has_pos_field(self) -> None:
+        """Node stores coordinates as pos tuple."""
+        n = Node(id=1, pos=(3.0, 4.0))
+        assert n.pos == (3.0, 4.0)
+
+    def test_node_x_property_returns_first_coordinate(self) -> None:
+        """Node.x returns pos[0]."""
+        n = Node(id=1, pos=(3.0, 4.0))
+        assert n.x == 3.0
+
+    def test_node_y_property_returns_second_coordinate(self) -> None:
+        """Node.y returns pos[1]."""
+        n = Node(id=1, pos=(3.0, 4.0))
+        assert n.y == 4.0
+
+    def test_node_y_zero_for_1d_nodes(self) -> None:
+        """1D nodes have y=0 when constructed with pos=(x, 0.0)."""
+        n = Node(id=2, pos=(5.0, 0.0))
+        assert n.y == 0.0
+        assert n.x == 5.0
+
+    def test_element_length_euclidean_for_inclined(self) -> None:
+        """Element.length uses 2D Euclidean distance for inclined members."""
+        # 3-4-5 right triangle: length = 5
+        mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
+        e = Element(id=1, node_i=Node(1, (0.0, 0.0)), node_j=Node(2, (3.0, 4.0)),
+                    element_type=ElementType.BAR, material=mat)
+        assert math.isclose(e.length, 5.0, rel_tol=1e-12)
+
+    def test_element_length_horizontal_unchanged(self) -> None:
+        """Element.length gives same result as before for horizontal elements."""
+        mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
+        e = Element(id=1, node_i=Node(1, (0.0, 0.0)), node_j=Node(2, (3.0, 0.0)),
+                    element_type=ElementType.BAR, material=mat)
+        assert math.isclose(e.length, 3.0, rel_tol=1e-12)
 
 def make_bar(L: float = 1.0, E: float = 1.0, A: float = 1.0) -> Element:
     """Create a bar element with given parameters."""
     mat = MaterialProperties(E=E, A=A, I=0.0)
-    return Element(id=1, node_i=Node(1, 0.0), node_j=Node(2, L),
+    return Element(id=1, node_i=Node(1, (0.0, 0.0)), node_j=Node(2, (L, 0.0)),
                    element_type=ElementType.BAR, material=mat)
 
 def make_beam(L: float = 1.0, E: float = 1.0, I: float = 1.0) -> Element:
     """Create a beam element with given parameters."""
     mat = MaterialProperties(E=E, A=1.0, I=I)
-    return Element(id=1, node_i=Node(1, 0.0), node_j=Node(2, L),
+    return Element(id=1, node_i=Node(1, (0.0, 0.0)), node_j=Node(2, (L, 0.0)),
                    element_type=ElementType.BEAM, material=mat)
 
 def make_frame(L: float = 1.0, E: float = 1.0, A: float = 1.0, I: float = 1.0) -> Element:
     """Create a frame element with given parameters."""
     mat = MaterialProperties(E=E, A=A, I=I)
-    return Element(id=1, node_i=Node(1, 0.0), node_j=Node(2, L),
+    return Element(id=1, node_i=Node(1, (0.0, 0.0)), node_j=Node(2, (L, 0.0)),
                    element_type=ElementType.FRAME, material=mat)
 
 
@@ -193,3 +235,78 @@ class TestBeamConsistentLoadVector:
         load = DistributedLoad(element_id=1, load_type=LoadType.DISTRIBUTED_Y, w_i=w, w_j=w)
         f = beam_consistent_load_vector(e, load)
         np.testing.assert_allclose(f[0] + f[2], w * L, rtol=1e-10)
+
+
+def make_truss(
+    xi: float = 0.0, yi: float = 0.0,
+    xj: float = 1.0, yj: float = 0.0,
+    E: float = 1.0, A: float = 1.0,
+) -> Element:
+    """Create a truss element between (xi, yi) and (xj, yj)."""
+    mat = MaterialProperties(E=E, A=A, I=0.0)
+    return Element(id=1, node_i=Node(1, (xi, yi)), node_j=Node(2, (xj, yj)),
+                   element_type=ElementType.TRUSS, material=mat)
+
+
+class TestTrussStiffnessMatrix:
+    """Tests for truss_stiffness_matrix (global coordinate system)."""
+
+    def test_shape_is_4x4(self) -> None:
+        """Truss stiffness matrix is 4x4."""
+        k = truss_stiffness_matrix(make_truss())
+        assert k.shape == (4, 4)
+
+    def test_symmetry(self) -> None:
+        """Truss stiffness matrix is symmetric."""
+        k = truss_stiffness_matrix(make_truss(xj=3.0, yj=4.0))
+        np.testing.assert_allclose(k, k.T, atol=1e-12)
+
+    def test_horizontal_known_values(self) -> None:
+        """Horizontal truss (0 deg) has known global stiffness."""
+        # c=1, s=0, EA/L=1 -> k = [[1,0,-1,0],[0,0,0,0],[-1,0,1,0],[0,0,0,0]]
+        k = truss_stiffness_matrix(make_truss(xi=0.0, yi=0.0, xj=1.0, yj=0.0))
+        expected = np.array([
+            [ 1., 0., -1., 0.],
+            [ 0., 0.,  0., 0.],
+            [-1., 0.,  1., 0.],
+            [ 0., 0.,  0., 0.],
+        ])
+        np.testing.assert_allclose(k, expected, atol=1e-12)
+
+    def test_vertical_known_values(self) -> None:
+        """Vertical truss (90 deg) has known global stiffness."""
+        # c=0, s=1, EA/L=1 -> k = [[0,0,0,0],[0,1,0,-1],[0,0,0,0],[0,-1,0,1]]
+        k = truss_stiffness_matrix(make_truss(xi=0.0, yi=0.0, xj=0.0, yj=1.0))
+        expected = np.array([
+            [0.,  0., 0.,  0.],
+            [0.,  1., 0., -1.],
+            [0.,  0., 0.,  0.],
+            [0., -1., 0.,  1.],
+        ])
+        np.testing.assert_allclose(k, expected, atol=1e-12)
+
+    def test_45_degree_known_values(self) -> None:
+        """45-degree truss has known global stiffness."""
+        # c=s=1/sqrt(2), L=sqrt(2), EA/L = 1/sqrt(2)
+        # k[i,j] = (EA/L) * n_i * n_j, n=[c,s,-c,-s]
+        # k[0,0] = (1/sqrt(2)) * c^2 = (1/sqrt(2)) * (1/2) = 1/(2*sqrt(2))
+        k = truss_stiffness_matrix(make_truss(xi=0.0, yi=0.0, xj=1.0, yj=1.0))
+        factor = 1.0 / (2.0 * math.sqrt(2))  # (EA/L) * c^2 = (1/sqrt(2)) * (1/2)
+        expected = factor * np.array([
+            [ 1.,  1., -1., -1.],
+            [ 1.,  1., -1., -1.],
+            [-1., -1.,  1.,  1.],
+            [-1., -1.,  1.,  1.],
+        ])
+        np.testing.assert_allclose(k, expected, atol=1e-12)
+
+    def test_scaled_EA(self) -> None:
+        """Truss stiffness scales linearly with EA."""
+        k1 = truss_stiffness_matrix(make_truss(E=1.0, A=1.0))
+        k2 = truss_stiffness_matrix(make_truss(E=200.0e9, A=0.01))
+        np.testing.assert_allclose(k2, k1 * 2.0e9, rtol=1e-10)
+
+    def test_dispatch_truss(self) -> None:
+        """element_stiffness_matrix dispatches TRUSS to 4x4 matrix."""
+        k = element_stiffness_matrix(make_truss())
+        assert k.shape == (4, 4)

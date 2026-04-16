@@ -35,6 +35,7 @@ _ELEMENT_DOFS: dict[ElementType, tuple[DOFType, ...]] = {
     ElementType.BAR:   (DOFType.U,),
     ElementType.BEAM:  (DOFType.V, DOFType.THETA),
     ElementType.FRAME: (DOFType.U, DOFType.V, DOFType.THETA),
+    ElementType.TRUSS: (DOFType.U, DOFType.V),
 }
 
 
@@ -104,6 +105,7 @@ def get_element_dof_indices(
       BAR:   [u_i, u_j]
       BEAM:  [v_i, theta_i, v_j, theta_j]
       FRAME: [u_i, v_i, theta_i, u_j, v_j, theta_j]
+      TRUSS: [u_i, v_i, u_j, v_j]
 
     Args:
         element_id (int): Identifier of the element.

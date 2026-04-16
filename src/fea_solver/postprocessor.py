@@ -10,7 +10,12 @@ Rotation theta(x) = dv/dx = (1/L) * d^1v/dxi^1.
 
 For bar elements, axial force N = EA/L * (u_j - u_i) and u(x) is linear in x.
 
+For truss elements (2D pin-jointed), axial force is recovered via coordinate projection:
+  N = (EA/L) * (c*(U_j - U_i) + s*(V_j - V_i))
+where c, s are direction cosines. Shear and moment are identically zero.
+
 compute_element_axial_force:   Axial force for BAR via stiffness formula.
+compute_truss_axial_force:     Axial force for TRUSS via direction-cosine projection.
 compute_bar_displacements:     Linear u(x) interpolation between nodal axial DOFs.
 compute_beam_internal_forces:  V(x), M(x), v(x), theta(x) via Hermite shape functions.
 postprocess_all_elements:      Dispatches per element type; returns list[ElementResult].
@@ -22,6 +27,7 @@ import logging
 import numpy as np
 from numpy.typing import NDArray
 
+from fea_solver.elements import _truss_direction_cosines
 from fea_solver.models import (
     DOFMap,
     DOFType,
@@ -59,6 +65,48 @@ def compute_element_axial_force(
     u_j = u[dof_map.index(element.node_j.id, DOFType.U)]
     N = element.material.E * element.material.A / element.length * (u_j - u_i)
     logger.debug("Element %d: axial force N = %.4e N", element_id, N)
+    return float(N)
+
+
+def compute_truss_axial_force(
+    element_id: int,
+    model: FEAModel,
+    dof_map: DOFMap,
+    u: NDArray[np.float64],
+) -> float:
+    """Compute axial force for a TRUSS element in global coordinates.
+
+    N = (EA/L) * (c*(U_j - U_i) + s*(V_j - V_i))
+
+    where c = (xj - xi)/L and s = (yj - yi)/L are the direction cosines.
+    Positive N indicates tension.
+
+    Args:
+        element_id (int): Identifier of the TRUSS element.
+        model (FEAModel): FEA problem containing the mesh.
+        dof_map (DOFMap): Global DOF index mapping.
+        u (NDArray[np.float64]): Full displacement vector.
+
+    Returns:
+        float: Axial force [force units], positive in tension.
+
+    Notes:
+        Uses direction-cosine projection of nodal displacements to recover axial
+        elongation, which is then multiplied by EA/L. This is the inverse of the
+        truss stiffness transformation.
+    """
+    element = next(e for e in model.mesh.elements if e.id == element_id)
+    L = element.length
+    c, s = _truss_direction_cosines(element)
+
+    U_i = u[dof_map.index(element.node_i.id, DOFType.U)]
+    V_i = u[dof_map.index(element.node_i.id, DOFType.V)]
+    U_j = u[dof_map.index(element.node_j.id, DOFType.U)]
+    V_j = u[dof_map.index(element.node_j.id, DOFType.V)]
+
+    delta = c * (U_j - U_i) + s * (V_j - V_i)
+    N = element.material.E * element.material.A / L * delta
+    logger.debug("Truss element %d: N = %.4e (c=%.4f, s=%.4f)", element_id, N, c, s)
     return float(N)
 
 
@@ -230,8 +278,10 @@ def postprocess_all_elements(
 ) -> list[ElementResult]:
     """Post-process all elements and return a list of ElementResult.
 
-    Dispatches to axial force computation for BAR elements and
-    internal force computation for BEAM and FRAME elements.
+    Dispatches per element type:
+      - BAR: axial force N = EA/L * (u_j - u_i); linear u(x).
+      - BEAM/FRAME: shear V(x), moment M(x), and displacements via Hermite shape functions.
+      - TRUSS: axial force N = (EA/L) * (c*(U_j-U_i) + s*(V_j-V_i)); shear/moment are zero.
 
     Args:
         model (FEAModel): FEA problem with mesh and material properties.
@@ -249,19 +299,18 @@ def postprocess_all_elements(
     for element in model.mesh.elements:
         if element.element_type == ElementType.BAR:
             N = compute_element_axial_force(element.id, model, dof_map, u)
-            zero = np.zeros(n_stations)
             x_st, u_stations = compute_bar_displacements(
                 element.id, model, dof_map, u, n_stations=n_stations
             )
             er = ElementResult(
                 element_id=element.id,
                 axial_force=N,
-                shear_forces=zero,
-                bending_moments=zero,
+                shear_forces=np.zeros(n_stations),
+                bending_moments=np.zeros(n_stations),
                 x_stations=x_st,
-                transverse_displacements=zero.copy(),
+                transverse_displacements=np.zeros(n_stations),
                 axial_displacements=u_stations,
-                rotations=zero.copy(),
+                rotations=np.zeros(n_stations),
             )
         elif element.element_type in (ElementType.BEAM, ElementType.FRAME):
             # FRAME also has axial force and axial displacement if U DOFs are present
@@ -289,6 +338,20 @@ def postprocess_all_elements(
                 transverse_displacements=v_stations,
                 axial_displacements=u_stations,
                 rotations=theta_stations,
+            )
+        elif element.element_type == ElementType.TRUSS:
+            N = compute_truss_axial_force(element.id, model, dof_map, u)
+            xi_vals = np.linspace(0.0, 1.0, n_stations)
+            x_st = element.node_i.x + xi_vals * (element.node_j.x - element.node_i.x)
+            er = ElementResult(
+                element_id=element.id,
+                axial_force=N,
+                shear_forces=np.zeros(n_stations),
+                bending_moments=np.zeros(n_stations),
+                x_stations=x_st,
+                transverse_displacements=np.zeros(n_stations),
+                axial_displacements=np.zeros(n_stations),
+                rotations=np.zeros(n_stations),
             )
         else:
             raise ValueError(f"Unknown element type: {element.element_type}")

@@ -1,0 +1,47 @@
+# Problem 5: 2D Pin-Jointed Truss (from JW notes, Ch. 4, p. 14)
+# 4 nodes, 5 members, EA = 2000, A = 0.2 => E = 10000
+#
+# Node layout (y up):
+#   1(0,10)---2(10,10)
+#      |   X    |
+#   3(0,0)----4(10,0)
+#
+# Elements: top bar (1-2), two diagonals (1-4, 3-2),
+#            right bar (2-4), bottom bar (3-4)
+#
+# TODO: Verify load directions and boundary conditions from problem image.
+#   - P=100 is applied at node 2 (downward, point_force_y = -100) per image
+#   - Q=50 is applied at node 4 (horizontal, point_force_x = 50) per image
+#   - Node 1 (0,10): pin support (fixed U and V)
+#   - Node 3 (0,0): roller support (fixed V only)
+label: "problem_5"
+unit_system: empirical
+
+mesh:
+  nodes:
+    - {id: 1, x:  0.0, y: 10.0}
+    - {id: 2, x: 10.0, y: 10.0}
+    - {id: 3, x:  0.0, y:  0.0}
+    - {id: 4, x: 10.0, y:  0.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 2, type: truss, material: steel}
+    - {id: 2, node_i: 1, node_j: 4, type: truss, material: steel}
+    - {id: 3, node_i: 3, node_j: 2, type: truss, material: steel}
+    - {id: 4, node_i: 2, node_j: 4, type: truss, material: steel}
+    - {id: 5, node_i: 3, node_j: 4, type: truss, material: steel}
+
+materials:
+  steel:
+    E: 10000.0   # E = EA / A = 2000 / 0.2 = 10000
+    A: 0.2
+    I: 0.0       # not used for truss
+
+boundary_conditions:
+  - {node_id: 1, type: pin}        # fixed U and V (pin)
+  - {node_id: 3, type: fixed_u}    # fixed U only (vertical roller -- node slides along x=0 wall)
+
+loads:
+  nodal:
+    - {node_id: 2, type: point_force_y, magnitude: -100.0}   # P = 100 downward
+    - {node_id: 4, type: point_force_x, magnitude:   50.0}   # Q = 50 horizontal
+  distributed: []

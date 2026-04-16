@@ -16,6 +16,7 @@ Key types:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -42,6 +43,9 @@ class ElementType(Enum):
         BAR: 1 DOF/node: u (axial displacement).
         BEAM: 2 DOF/node: v (transverse displacement), theta (rotation).
         FRAME: 3 DOF/node: u (axial), v (transverse), theta (rotation).
+        TRUSS: 2 DOF/node: u (x-displacement), v (y-displacement).
+            Used for 2D pin-jointed trusses; stiffness is assembled in global
+            coordinates via coordinate transformation.
 
     Notes:
         Determines how many DOFs are allocated at each node during DOFMap construction
@@ -51,6 +55,7 @@ class ElementType(Enum):
     BAR = auto()    # 1 DOF/node: u (axial)
     BEAM = auto()   # 2 DOF/node: v (transverse), theta (rotation)
     FRAME = auto()  # 3 DOF/node: u, v, theta
+    TRUSS = auto()  # 2 DOF/node: u (x-disp), v (y-disp); 2D pin-jointed
 
 
 class DOFType(Enum):
@@ -125,19 +130,40 @@ class LoadType(Enum):
 
 @dataclass(frozen=True, slots=True)
 class Node:
-    """Immutable point in 1D space along the structural axis.
+    """Immutable point in 2D space representing a structural node.
 
     Fields:
         id (int): Unique node identifier. Must be positive.
-        x (float): Position along beam axis in metres.
+        pos (tuple[float, float]): (x, y) coordinates in metres.
 
     Notes:
         Frozen and slotted for efficient storage in large meshes. Nodes are
         typically created in ascending id order during mesh construction.
+        The x and y properties provide named access to pos[0] and pos[1]
+        for convenience and backward compatibility with 1D element code.
+        For 1D (bar/beam/frame) problems, y is 0.0 and pos = (x, 0.0).
     """
 
     id: int
-    x: float  # position along beam axis [m]
+    pos: tuple[float, float]  # (x, y) coordinates [m]
+
+    @property
+    def x(self) -> float:
+        """Return x-coordinate (pos[0]).
+
+        Returns:
+            float: Global x-coordinate in metres.
+        """
+        return self.pos[0]
+
+    @property
+    def y(self) -> float:
+        """Return y-coordinate (pos[1]).
+
+        Returns:
+            float: Global y-coordinate in metres.
+        """
+        return self.pos[1]
 
 
 # ---------------------------------------------------------------------------
@@ -195,15 +221,19 @@ class Element:
 
     @property
     def length(self) -> float:
-        """Compute Euclidean distance between the two end nodes.
+        """Compute 2D Euclidean distance between the two end nodes.
 
         Returns:
             float: Element length in metres. Always positive.
 
         Notes:
             Computed on every call; not cached. For large meshes call once and store.
+            For 1D elements (y=0), this equals abs(node_j.x - node_i.x).
+            For 2D truss elements, this equals sqrt(Dx^2 + Dy^2).
         """
-        return abs(self.node_j.x - self.node_i.x)
+        dx = self.node_j.x - self.node_i.x
+        dy = self.node_j.y - self.node_i.y
+        return math.sqrt(dx * dx + dy * dy)
 
 
 # ---------------------------------------------------------------------------
