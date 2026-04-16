@@ -6,7 +6,8 @@ design principles. Enums provide type-safe dispatch throughout the system.
 Key types:
   Node, Element, Mesh, MaterialProperties: geometric and material data.
   LinearConstraint, NodalLoad, DistributedLoad: applied constraints and loads.
-  FEAModel: complete problem definition (mesh + BCs + loads).
+  FEAModel: complete problem definition; boundary conditions enforced via
+      penalty method (penalty_alpha scales penalty stiffness).
   DOFMap: (node_id, DOFType) -> global DOF index mapping.
   SolutionResult: displacements and reactions from a single solve.
   ElementResult: internal forces, moments, and displacements at sampling stations.
@@ -225,16 +226,20 @@ class LinearConstraint:
     Fields:
         node_id (int): Node at which the constraint is applied.
         coefficients (tuple[float, float, float]): Constraint direction vector
-            in [U, V, THETA] DOF order (global coordinates). Must be a unit
-            vector (normalized in _schema_to_model before construction).
-            Non-zero components for DOFs absent at the node raise ValueError
-            during constraint application.
-        rhs (float): Prescribed value. Default 0.0 (homogeneous constraint).
+            in [U, V, THETA] DOF order (global coordinates). Typically normalized
+            to unit length by the YAML parser (_schema_to_model) so that
+            compute_constraint_residuals returns physically meaningful reaction
+            magnitudes. Non-zero components for DOFs absent at the node raise
+            ValueError during constraint application.
+        rhs (float): Prescribed displacement or rotation value. Units are metres
+            (for U/V constraints) or radians (for THETA constraints). Default 0.0
+            (homogeneous constraint).
 
     Notes:
         Applied via the penalty method: adds k_penalty * outer(g, g) to K
-        and k_penalty * rhs * g to F, where g is the global DOF coefficient
-        vector built from coefficients and the node's DOF indices.
+        and k_penalty * rhs * g to F, where g is the global-length coefficient
+        vector: g[dof_index] = coefficients[i] for each DOF type present at the
+        node, zeros elsewhere.
     """
 
     node_id: int
@@ -318,7 +323,7 @@ class FEAModel:
         label (str): Optional descriptive label. Default "unnamed".
         unit_system (UnitSystem): Canonical unit system all numeric values are stored in.
             Default UnitSystem.SI. Determines reporter column-header labels.
-        penalty_alpha (float): Scale factor for penalty stiffness. The penalty
+        penalty_alpha (float): Dimensionless scale factor for penalty stiffness. The penalty
             parameter used during constraint enforcement is computed as
             penalty_alpha * max(abs(diag(K))). Default 1e8.
 
