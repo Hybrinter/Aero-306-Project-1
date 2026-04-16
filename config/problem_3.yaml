@@ -33,8 +33,9 @@ solutions:
         A: 1.0         # in^2
         I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}     # left support
-      - {node_id: 2, type: pin}           # right support
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
+      - {node_id: 2, coefficients: [0.0, 1.0, 0.0]}
     loads:
       distributed:
         - element_ids: all
@@ -72,8 +73,9 @@ solutions:
         A: 1.0         # in^2
         I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}     # left support
-      - {node_id: 3, type: pin}           # right support
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
+      - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}
     loads:
       distributed:
         - element_ids: all

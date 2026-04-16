@@ -63,7 +63,7 @@
 **Files:**
 - Modify: `src/fea_solver/models.py`
 
-- [ ] **Step 1: Remove `BoundaryConditionType` enum and `BoundaryCondition` dataclass, add `LinearConstraint`**
+- [x] **Step 1: Remove `BoundaryConditionType` enum and `BoundaryCondition` dataclass, add `LinearConstraint`**
 
 Replace the section between `class BoundaryConditionType(Enum):` and `class LoadType(Enum):` (lines 79–101) with:
 

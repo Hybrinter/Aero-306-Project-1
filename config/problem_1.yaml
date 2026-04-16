@@ -24,9 +24,10 @@ solutions:
         A: 0.6695       # in^2
         I: 0.1          # in^4
     boundary_conditions:
-      - {node_id: 1, type: pin}
-      - {node_id: 2, type: fixed_all}
-      - {node_id: 3, type: pin}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 2, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 2, coefficients: [0.0, 0.0, 1.0]}
+      - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}
     loads:
       nodal:
         - {node_id: 4, type: point_force_y, magnitude: 5.0}   # lb, upward
@@ -55,9 +56,10 @@ solutions:
         A: 0.6695       # in^2
         I: 0.1          # in^4
     boundary_conditions:
-      - {node_id: 1, type: pin}
-      - {node_id: 2, type: fixed_all}
-      - {node_id: 3, type: pin}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 2, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 2, coefficients: [0.0, 0.0, 1.0]}
+      - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}
     loads:
       nodal:
         - {node_id: 4, type: point_force_y, magnitude: 5.0}   # lb, upward

@@ -47,10 +47,8 @@ materials:
     I: 1.0
 
 boundary_conditions:
-  - node_id: 1
-    type: pin
-  - node_id: 5
-    type: roller
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 5, coefficients: [0.0, 1.0, 0.0]}
 
 loads:
   nodal:

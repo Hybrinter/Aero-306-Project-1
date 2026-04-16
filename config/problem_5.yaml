@@ -36,8 +36,10 @@ materials:
     I: 0.0       # not used for truss
 
 boundary_conditions:
-  - {node_id: 1, type: pin}    # fixed U and V (pin)
-  - {node_id: 3, type: pin}    # fixed U and V
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 3, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}
 
 loads:
   nodal:

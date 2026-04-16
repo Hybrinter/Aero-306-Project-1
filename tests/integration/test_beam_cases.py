@@ -8,7 +8,6 @@ from fea_solver.assembler import build_dof_map, assemble_global_stiffness, assem
 from fea_solver.solver import run_solve_pipeline
 from fea_solver.postprocessor import postprocess_all_elements
 from fea_solver.models import DOFType
-from fea_solver.constraints import get_constrained_dof_indices
 
 CONFIG = Path("config")
 
@@ -47,7 +46,7 @@ class TestCase02CantileverBeam:
         model, dof_map, result, _ = full_solve(CONFIG / "example_case_02_cantilever_beam.yaml")
         fixed_node = min(model.mesh.nodes, key=lambda n: n.x)
         theta = result.displacements[dof_map.index(fixed_node.id, DOFType.THETA)]
-        assert theta == pytest.approx(0.0, abs=1e-12)
+        assert theta == pytest.approx(0.0, abs=1e-8)
 
 
 class TestCase03SimplySupported:
@@ -64,18 +63,14 @@ class TestCase03SimplySupported:
     def test_support_reactions_sum_to_applied_load(self) -> None:
         """Support reactions balance applied load."""
         model, dof_map, result, _ = full_solve(CONFIG / "example_case_03_simply_supported.yaml")
-        # Both support reactions must sum to -P = +1 (upward).
-        # PIN at node 1 constrains V (beam has no U DOF).
-        # ROLLER at node 5 constrains V.
-        # Find the constrained DOF indices and match to V at nodes 1 and 5.
-        constrained = get_constrained_dof_indices(model, dof_map)
-        total_V_reaction = 0.0
-        for i, global_idx in enumerate(constrained):
-            for support_node_id in (1, 5):
-                if dof_map.has_dof(support_node_id, DOFType.V):
-                    if global_idx == dof_map.index(support_node_id, DOFType.V):
-                        total_V_reaction += result.reactions[i]
-        assert abs(total_V_reaction) == pytest.approx(1.0, rel=0.01)
+        # Both support V-reactions must sum to +1 (upward, balancing P=-1 downward).
+        # After migration: constraint 0 = V at node 1, constraint 1 = V at node 5.
+        total_v_reaction = sum(
+            result.reactions[i]
+            for i, c in enumerate(model.boundary_conditions)
+            if c.coefficients[1] == pytest.approx(1.0)   # V-direction constraint
+        )
+        assert abs(total_v_reaction) == pytest.approx(1.0, rel=0.01)
 
     def test_symmetric_deflection(self) -> None:
         """Symmetric loading produces symmetric deflection."""
@@ -99,12 +94,12 @@ class TestCase04FixedFixed:
         assert v_mid == pytest.approx(analytical, rel=0.01)
 
     def test_end_slopes_are_zero(self) -> None:
-        """Fixed end slopes are zero."""
+        """Fixed end slopes are zero (within penalty-method tolerance)."""
         model, dof_map, result, _ = full_solve(CONFIG / "example_case_04_fixed_fixed.yaml")
         for node in model.mesh.nodes:
             if abs(node.x - 0.0) < 0.01 or abs(node.x - 2.0) < 0.01:
                 theta = result.displacements[dof_map.index(node.id, DOFType.THETA)]
-                assert theta == pytest.approx(0.0, abs=1e-12)
+                assert theta == pytest.approx(0.0, abs=1e-8)
 
 
 class TestCase06DistributedLoad:

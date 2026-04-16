@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from fea_solver.models import (
-    BoundaryCondition, BoundaryConditionType, DOFMap, DOFType,
-    Element, ElementType, FEAModel, LoadType, MaterialProperties,
+    DOFMap, DOFType,
+    Element, ElementType, FEAModel, LinearConstraint, LoadType, MaterialProperties,
     Mesh, Node, NodalLoad, SolutionResult
 )
 from fea_solver.assembler import build_dof_map, assemble_global_stiffness, assemble_global_force_vector
@@ -22,10 +22,11 @@ def solve_cantilever_beam(L: float = 1.0, EI: float = 1.0, P: float = -1.0) -> t
     mat = MaterialProperties(E=EI, A=1.0, I=1.0)
     n1, n2 = Node(1, (0.0, 0.0)), Node(2, (L, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.BEAM, material=mat)
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_ALL)
+    c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+    c_t = LinearConstraint(node_id=1, coefficients=(0.0, 0.0, 1.0))
     load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_Y, magnitude=P)
     model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-                     boundary_conditions=(bc,), nodal_loads=(load,),
+                     boundary_conditions=(c_v, c_t), nodal_loads=(load,),
                      distributed_loads=(), label="cantilever")
     dof_map = build_dof_map(model)
     K = assemble_global_stiffness(model, dof_map)
@@ -39,10 +40,10 @@ def solve_bar(L: float = 1.0, EA: float = 1.0, P: float = 1.0) -> tuple:
     mat = MaterialProperties(E=EA, A=1.0, I=0.0)
     n1, n2 = Node(1, (0.0, 0.0)), Node(2, (L, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.BAR, material=mat)
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_U)
+    c = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0))
     load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_X, magnitude=P)
     model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-                     boundary_conditions=(bc,), nodal_loads=(load,),
+                     boundary_conditions=(c,), nodal_loads=(load,),
                      distributed_loads=(), label="bar")
     dof_map = build_dof_map(model)
     K = assemble_global_stiffness(model, dof_map)
@@ -118,7 +119,7 @@ class TestComputeBeamInternalForces:
         x, V, M, v, theta = compute_beam_internal_forces(
             1, model, dof_map, result.displacements, n_stations=100
         )
-        assert v[0] == pytest.approx(0.0, abs=1e-10)
+        assert v[0] == pytest.approx(0.0, abs=1e-8)
 
     def test_cantilever_tip_displacement_matches_formula(self) -> None:
         """Cantilever tip displacement v(L) = P*L^3 / (3*EI)."""
@@ -136,17 +137,18 @@ class TestComputeBeamInternalForces:
         x, V, M, v, theta = compute_beam_internal_forces(
             1, model, dof_map, result.displacements, n_stations=100
         )
-        assert theta[0] == pytest.approx(0.0, abs=1e-10)
+        assert theta[0] == pytest.approx(0.0, abs=1e-8)
 
     def test_x_stations_are_global_coordinates(self) -> None:
         """X stations use global coordinates."""
         mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
         n1, n2 = Node(1, (2.0, 0.0)), Node(2, (3.0, 0.0))
         elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.BEAM, material=mat)
-        bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_ALL)
+        c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+        c_t = LinearConstraint(node_id=1, coefficients=(0.0, 0.0, 1.0))
         load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_Y, magnitude=-1.0)
         model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-                         boundary_conditions=(bc,), nodal_loads=(load,),
+                         boundary_conditions=(c_v, c_t), nodal_loads=(load,),
                          distributed_loads=(), label="offset_beam")
         dof_map = build_dof_map(model)
         K = assemble_global_stiffness(model, dof_map)
@@ -218,13 +220,14 @@ def solve_horizontal_truss(
     mat = MaterialProperties(E=EA, A=1.0, I=0.0)
     n1, n2 = Node(1, (0.0, 0.0)), Node(2, (L, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.TRUSS, material=mat)
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.PIN)
+    c_u = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0))
+    c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
     load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_X, magnitude=P)
     # Also fix vertical at node 2 so truss doesn't have rigid body vertical mode
-    bc2 = BoundaryCondition(node_id=2, bc_type=BoundaryConditionType.FIXED_V)
+    c_v2 = LinearConstraint(node_id=2, coefficients=(0.0, 1.0, 0.0))
     model = FEAModel(
         mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-        boundary_conditions=(bc, bc2),
+        boundary_conditions=(c_u, c_v, c_v2),
         nodal_loads=(load,),
         distributed_loads=(),
         label="horizontal_truss",

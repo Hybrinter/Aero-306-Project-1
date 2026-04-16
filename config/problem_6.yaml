@@ -53,8 +53,9 @@ materials:
     I: 0.0
 
 boundary_conditions:
-  - {node_id: 1, type: roller}    # roller: fixed V only
-  - {node_id: 5, type: pin}    # pin: fixed U and V
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}   # roller: fixed V only
+  - {node_id: 5, coefficients: [1.0, 0.0, 0.0]}   # pin: fixed U and V
+  - {node_id: 5, coefficients: [0.0, 1.0, 0.0]}
 
 loads:
   nodal:

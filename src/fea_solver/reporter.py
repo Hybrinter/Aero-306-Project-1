@@ -159,34 +159,27 @@ def print_reaction_forces(result: SolutionResult) -> None:
 
     Notes:
         Output is printed to console via rich.console.Console.
-        Identifies constrained DOFs and looks up corresponding reactions.
+        Each row corresponds to one LinearConstraint in model.boundary_conditions.
+        Reaction[i] = k_penalty * (a_i^T * u_node_i - rhs_i).
         Force/moment units match the model's canonical unit system.
     """
     model = result.model
-    dof_map = result.dof_map
-
-    # Reconstruct which DOFs are constrained (same logic as constraints.py)
-    from fea_solver.constraints import get_constrained_dof_indices
-    constrained = get_constrained_dof_indices(model, dof_map)
 
     lbl = _lbl(model)
     table = Table(title=f"Reaction Forces -- {model.label}", show_header=True,
                   header_style="bold red")
     table.add_column("Node ID", justify="right")
-    table.add_column("DOF Type", justify="center")
-    table.add_column("Global Index", justify="right")
+    table.add_column("Direction [U, V, Th]", justify="center")
+    table.add_column("Prescribed", justify="right")
     table.add_column(f"Reaction [{lbl['force']} or {lbl['moment']}]", justify="right")
 
-    reverse_mapping = {idx: key for key, idx in dof_map.mapping.items()}
-    for i, global_idx in enumerate(constrained):
-        result_tuple = reverse_mapping.get(global_idx)
-        if result_tuple is None:
-            raise KeyError(f"No DOF found for global index {global_idx}")
-        node_id, dof_type = result_tuple
+    for i, constraint in enumerate(model.boundary_conditions):
+        c = constraint.coefficients
+        coeff_str = f"[{c[0]:.3f}, {c[1]:.3f}, {c[2]:.3f}]"
         table.add_row(
-            str(node_id),
-            dof_type.value,
-            str(global_idx),
+            str(constraint.node_id),
+            coeff_str,
+            f"{constraint.rhs:.4e}",
             f"{result.reactions[i]:.6e}",
         )
 

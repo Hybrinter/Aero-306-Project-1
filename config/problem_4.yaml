@@ -33,10 +33,12 @@ solutions:
         A: 1.0         # in^2
         I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
-      - {node_id: 2, type: pin}   # pin support at x=L/4
-      - {node_id: 4, type: pin}   # pin support at x=3L/4
-      - {node_id: 5, type: fixed_all}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
+      - {node_id: 2, coefficients: [0.0, 1.0, 0.0]}   # pin support at x=L/4
+      - {node_id: 4, coefficients: [0.0, 1.0, 0.0]}   # pin support at x=3L/4
+      - {node_id: 5, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 5, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 3, type: point_moment, magnitude: 100.0}   # in-lb, counterclockwise
@@ -69,10 +71,12 @@ solutions:
         A: 1.0         # in^2
         I: 1.0         # in^4  (EI = 1.0E6 lb-in^2)
     boundary_conditions:
-      - { node_id: 1, type: fixed_all }
-      - {node_id: 3, type: pin}   # pin support at x=L/4
-      - {node_id: 7, type: pin}   # pin support at x=3L/4
-      - {node_id: 9, type: fixed_all}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
+      - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}   # pin support at x=L/4
+      - {node_id: 7, coefficients: [0.0, 1.0, 0.0]}   # pin support at x=3L/4
+      - {node_id: 9, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 9, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 5, type: point_moment, magnitude: 100.0}   # in-lb, counterclockwise

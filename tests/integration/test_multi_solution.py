@@ -32,7 +32,8 @@ solutions:
     materials:
       steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 2, type: point_force_y, magnitude: -1000.0}
@@ -48,7 +49,8 @@ solutions:
     materials:
       steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 3, type: point_force_y, magnitude: -1000.0}

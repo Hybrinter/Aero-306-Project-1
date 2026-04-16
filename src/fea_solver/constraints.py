@@ -1,12 +1,17 @@
-"""Kinematic constraint application via the reduction (elimination) method.
+"""Kinematic constraint application via the penalty method.
 
-The reduction method:
-  1. Identify free and constrained DOF indices.
-  2. Partition K into K_ff (free-free) and K_fc (free-constrained).
-  3. For homogeneous BCs (u_c = 0): reduced system is K_ff * u_f = F_f.
-  4. Solve the reduced system, then recover full displacement vector.
+The penalty method:
+  1. For each LinearConstraint, build a global coefficient vector g from
+     the constraint's (node_id, coefficients) and the DOF map.
+  2. Add k_penalty * outer(g, g) to K and k_penalty * rhs * g to F.
+  3. Solve the full (unpartitioned) modified system K_mod * u = F_mod.
+  4. Recover per-constraint reaction forces as k_penalty * (a^T * u - rhs).
 
-This approach is exact and numerically stable, unlike the penalty method.
+The penalty parameter is computed as penalty_alpha * max(abs(diag(K_natural)))
+so that it scales with the problem stiffness without needing manual tuning.
+
+apply_penalty_constraints: add penalty terms to K and F for all constraints.
+compute_constraint_residuals: compute per-constraint reaction magnitudes post-solve.
 """
 from __future__ import annotations
 
@@ -15,104 +20,116 @@ import logging
 import numpy as np
 from numpy.typing import NDArray
 
-from fea_solver.models import (
-    BoundaryConditionType,
-    DOFMap,
-    DOFType,
-    FEAModel,
-)
+from fea_solver.models import DOFMap, DOFType, LinearConstraint
 
 logger = logging.getLogger(__name__)
 
-# Maps each BC type to the DOF types it constrains
-_BC_TO_DOF_TYPES: dict[BoundaryConditionType, tuple[DOFType, ...]] = {
-    BoundaryConditionType.FIXED_U:     (DOFType.U,),
-    BoundaryConditionType.FIXED_V:     (DOFType.V,),
-    BoundaryConditionType.FIXED_THETA: (DOFType.THETA,),
-    BoundaryConditionType.FIXED_ALL:   (DOFType.U, DOFType.V, DOFType.THETA),
-    BoundaryConditionType.PIN:         (DOFType.U, DOFType.V),
-    BoundaryConditionType.ROLLER:      (DOFType.V,),
-}
+# Canonical mapping from coefficient position to DOFType
+_COEFF_INDEX_TO_DOF: tuple[DOFType, DOFType, DOFType] = (
+    DOFType.U,
+    DOFType.V,
+    DOFType.THETA,
+)
 
 
-def get_constrained_dof_indices(model: FEAModel, dof_map: DOFMap) -> list[int]:
-    """Return sorted list of global DOF indices that are kinematically constrained.
-
-    Args:
-        model (FEAModel): FEA problem containing boundary conditions.
-        dof_map (DOFMap): DOF mapping with (node_id, DOFType) to global index.
-
-    Returns:
-        list[int]: Sorted list of global DOF indices that are constrained by BCs.
-
-    Notes:
-        Only constrains DOF types that actually exist at the node. For example,
-        a PIN on a BEAM node constrains only V (not U), because BEAM nodes have
-        no U DOF. Result is logged at debug level.
-    """
-    constrained: set[int] = set()
-    for bc in model.boundary_conditions:
-        dof_types = _BC_TO_DOF_TYPES[bc.bc_type]
-        for dof_type in dof_types:
-            if dof_map.has_dof(bc.node_id, dof_type):
-                constrained.add(dof_map.index(bc.node_id, dof_type))
-    result = sorted(constrained)
-    logger.debug("Constrained DOFs: %s", result)
-    return result
-
-
-def get_free_dof_indices(model: FEAModel, dof_map: DOFMap) -> list[int]:
-    """Return sorted list of global DOF indices that are free (unconstrained).
-
-    Args:
-        model (FEAModel): FEA problem containing boundary conditions.
-        dof_map (DOFMap): DOF mapping with (node_id, DOFType) to global index.
-
-    Returns:
-        list[int]: Sorted list of global DOF indices not constrained by any BC.
-
-    Notes:
-        Computed as the complement of constrained DOF indices. Result is
-        logged at debug level.
-    """
-    constrained = set(get_constrained_dof_indices(model, dof_map))
-    free = sorted(i for i in range(dof_map.total_dofs) if i not in constrained)
-    logger.debug("Free DOFs: %s", free)
-    return free
-
-
-def apply_constraints_reduction(
+def apply_penalty_constraints(
     K: NDArray[np.float64],
     F: NDArray[np.float64],
-    constrained_dofs: list[int],
+    constraints: tuple[LinearConstraint, ...],
+    dof_map: DOFMap,
+    k_penalty: float,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Apply kinematic boundary conditions via the reduction/elimination method.
+    """Apply kinematic constraints via the penalty method.
 
-    Partitions the system into free (f) and constrained (c) sub-sets.
-    For homogeneous BCs (u_c = 0), the reduced system is:
-        K_ff * u_f = F_f
+    For each constraint with coefficient vector a = [a_U, a_V, a_THETA]:
+      1. Build global coefficient vector g (length n_dofs) by placing a[i]
+         at the global DOF index for (node_id, DOFType_i) for each non-zero a[i].
+      2. K_mod += k_penalty * outer(g, g)
+      3. F_mod += k_penalty * rhs * g
 
     Args:
         K (NDArray[np.float64]): Global stiffness matrix, shape (n, n).
         F (NDArray[np.float64]): Global force vector, shape (n,).
-        constrained_dofs (list[int]): Sorted list of constrained DOF global indices.
+        constraints (tuple[LinearConstraint, ...]): All constraints to apply.
+        dof_map (DOFMap): DOF index mapping for (node_id, DOFType) lookups.
+        k_penalty (float): Penalty stiffness parameter (problem-scale-dependent).
 
     Returns:
-        tuple[NDArray[np.float64], NDArray[np.float64]]: Pair (K_ff, F_f) containing
-            the reduced stiffness matrix and reduced force vector for free DOFs only.
+        tuple[NDArray[np.float64], NDArray[np.float64]]: New (K_mod, F_mod)
+            arrays. The input K and F are not mutated.
+
+    Raises:
+        ValueError: If a constraint has a non-zero coefficient for a DOF that
+            does not exist at the node (e.g., U component on a BEAM-only node).
 
     Notes:
-        Exact method without penalty coefficients. Assumes homogeneous BCs (u_c = 0).
-        Result is logged at debug level showing counts of free/constrained DOFs.
+        Returns copies; input arrays are never mutated.
+        The penalty parameter k_penalty is typically computed as
+        model.penalty_alpha * max(abs(diag(K_natural))) by the caller.
     """
-    n = K.shape[0]
-    all_dofs = list(range(n))
-    constrained_set = set(constrained_dofs)
-    free_dofs = [i for i in all_dofs if i not in constrained_set]
+    K_mod = K.copy()
+    F_mod = F.copy()
+    n = K_mod.shape[0]
 
-    K_ff = K[np.ix_(free_dofs, free_dofs)]
-    F_f = F[free_dofs]
+    for constraint in constraints:
+        g = np.zeros(n)
+        for coeff_idx, dof_type in enumerate(_COEFF_INDEX_TO_DOF):
+            a_i = constraint.coefficients[coeff_idx]
+            if a_i == 0.0:
+                continue
+            if not dof_map.has_dof(constraint.node_id, dof_type):
+                raise ValueError(
+                    f"Constraint at node {constraint.node_id} has non-zero "
+                    f"coefficient for {dof_type.value} ({a_i}), but that DOF "
+                    f"does not exist at this node."
+                )
+            g[dof_map.index(constraint.node_id, dof_type)] = a_i
 
-    logger.debug("Reduced system: %d free DOFs, %d constrained DOFs",
-                 len(free_dofs), len(constrained_dofs))
-    return K_ff, F_f
+        K_mod += k_penalty * np.outer(g, g)
+        F_mod += k_penalty * constraint.rhs * g
+
+    logger.debug(
+        "Penalty constraints applied: %d constraints, k_penalty=%.3e",
+        len(constraints), k_penalty,
+    )
+    return K_mod, F_mod
+
+
+def compute_constraint_residuals(
+    u: NDArray[np.float64],
+    constraints: tuple[LinearConstraint, ...],
+    dof_map: DOFMap,
+    k_penalty: float,
+) -> NDArray[np.float64]:
+    """Compute per-constraint reaction force magnitudes after solving.
+
+    For each constraint i with coefficient vector a_i and prescribed value rhs_i:
+        reactions[i] = k_penalty * (a_i^T * u_node_i - rhs_i)
+
+    This is the constraint force: the force the support applies to the structure.
+
+    Args:
+        u (NDArray[np.float64]): Full displacement vector, shape (n_dofs,).
+        constraints (tuple[LinearConstraint, ...]): All constraints.
+        dof_map (DOFMap): DOF index mapping for (node_id, DOFType) lookups.
+        k_penalty (float): Penalty stiffness parameter used during assembly.
+
+    Returns:
+        NDArray[np.float64]: Reaction magnitudes, shape (n_constraints,).
+            reactions[i] corresponds to constraints[i].
+
+    Notes:
+        For axis-aligned constraints with unit coefficients, the reaction equals
+        the physical support force (e.g., k_p * v_1 is the vertical reaction).
+        Residuals are near zero when the constraint is well-enforced.
+    """
+    reactions = np.empty(len(constraints))
+    for i, constraint in enumerate(constraints):
+        a_dot_u = 0.0
+        for coeff_idx, dof_type in enumerate(_COEFF_INDEX_TO_DOF):
+            a_i = constraint.coefficients[coeff_idx]
+            if a_i != 0.0 and dof_map.has_dof(constraint.node_id, dof_type):
+                a_dot_u += a_i * u[dof_map.index(constraint.node_id, dof_type)]
+        reactions[i] = k_penalty * (a_dot_u - constraint.rhs)
+    logger.debug("Constraint residuals: %s", reactions)
+    return reactions

@@ -8,8 +8,8 @@ matplotlib.use("Agg")  # non-interactive backend for tests
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
 from fea_solver.models import (
-    BoundaryCondition, BoundaryConditionType, Element, ElementResult, ElementType,
-    FEAModel, MaterialProperties, Mesh, Node, SolutionSeries, UnitSystem,
+    Element, ElementResult, ElementType,
+    FEAModel, LinearConstraint, MaterialProperties, Mesh, Node, SolutionSeries, UnitSystem,
 )
 from fea_solver.plotter import (
     plot_axial_displacement,
@@ -25,10 +25,11 @@ def _make_model(unit_system: UnitSystem = UnitSystem.SI) -> FEAModel:
     mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
     n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.BEAM, material=mat)
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_ALL)
+    c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+    c_t = LinearConstraint(node_id=1, coefficients=(0.0, 0.0, 1.0))
     return FEAModel(
         mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-        boundary_conditions=(bc,),
+        boundary_conditions=(c_v, c_t),
         nodal_loads=(),
         distributed_loads=(),
         label="test",

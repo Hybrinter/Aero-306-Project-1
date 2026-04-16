@@ -6,12 +6,11 @@ import numpy as np
 import pytest
 
 from fea_solver.models import (
-    BoundaryCondition,
-    BoundaryConditionType,
     DistributedLoad,
     Element,
     ElementType,
     FEAModel,
+    LinearConstraint,
     LoadType,
     MaterialProperties,
     Mesh,
@@ -56,9 +55,9 @@ def two_node_bar_model(unit_bar_material: MaterialProperties) -> FEAModel:
     elem = Element(id=1, node_i=n1, node_j=n2,
                    element_type=ElementType.BAR, material=unit_bar_material)
     mesh = Mesh(nodes=(n1, n2), elements=(elem,))
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_U)
+    c = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0))
     load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_X, magnitude=1.0)
-    return FEAModel(mesh=mesh, boundary_conditions=(bc,),
+    return FEAModel(mesh=mesh, boundary_conditions=(c,),
                     nodal_loads=(load,), distributed_loads=(), label="two_node_bar")
 
 
@@ -70,7 +69,8 @@ def cantilever_beam_model(unit_beam_material: MaterialProperties) -> FEAModel:
     elem = Element(id=1, node_i=n1, node_j=n2,
                    element_type=ElementType.BEAM, material=unit_beam_material)
     mesh = Mesh(nodes=(n1, n2), elements=(elem,))
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_ALL)
+    c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+    c_t = LinearConstraint(node_id=1, coefficients=(0.0, 0.0, 1.0))
     load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_Y, magnitude=-1.0)
-    return FEAModel(mesh=mesh, boundary_conditions=(bc,),
+    return FEAModel(mesh=mesh, boundary_conditions=(c_v, c_t),
                     nodal_loads=(load,), distributed_loads=(), label="cantilever_beam")

@@ -47,8 +47,7 @@ materials:
     I: 0.0
 
 boundary_conditions:
-  - node_id: 1
-    type: fixed_u
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
 
 loads:
   nodal:

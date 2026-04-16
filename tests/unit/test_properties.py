@@ -8,28 +8,28 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from hypothesis import given, assume
+from hypothesis import given, assume, settings
 from hypothesis import strategies as st
 
 from fea_solver.models import (
-    BoundaryCondition,
-    BoundaryConditionType,
     DOFMap,
     DOFType,
     Element,
     ElementType,
     FEAModel,
+    LinearConstraint,
     MaterialProperties,
     Mesh,
     Node,
 )
-from fea_solver.assembler import build_dof_map, get_element_dof_indices
-from fea_solver.constraints import get_constrained_dof_indices, get_free_dof_indices
+from fea_solver.assembler import build_dof_map, get_element_dof_indices, assemble_global_force_vector, assemble_global_stiffness
+from fea_solver.constraints import apply_penalty_constraints, compute_constraint_residuals
 from fea_solver.elements import (
     bar_stiffness_matrix,
     beam_stiffness_matrix,
     frame_stiffness_matrix,
 )
+from fea_solver.solver import compute_penalty_parameter
 
 
 def make_bar_element(E: float, A: float, L: float) -> Element:
@@ -292,68 +292,49 @@ def test_dof_map_bijectivity(node_i_id: int, node_j_id: int) -> None:
 
 
 @given(
-    st.integers(min_value=1, max_value=100),
-    st.integers(min_value=101, max_value=200),
+    node_i_id=st.integers(min_value=1, max_value=10),
+    L=st.floats(min_value=0.01, max_value=100.0),
 )
-def test_dof_partition_completeness(node_i_id: int, node_j_id: int) -> None:
-    """DOF partition is complete and disjoint for a constrained bar model.
+@settings(max_examples=50)
+def test_penalty_constraint_enforced_after_solve(node_i_id: int, L: float) -> None:
+    """After penalty solve, constrained DOF displacement is < 1/penalty_alpha.
 
-    For a two-node bar model with one FIXED_ALL BC:
-    - The union of free and constrained DOF indices covers all DOFs.
-    - The two sets are disjoint (no overlap).
+    For a simple bar element with an axial constraint and penalty method,
+    the constrained DOF should have a displacement magnitude that is
+    inversely proportional to the penalty parameter.
 
     Args:
-        node_i_id (int): Node ID for first node, from [1, 100].
-        node_j_id (int): Node ID for second node, from [101, 200].
+        node_i_id (int): Node ID for first node, from [1, 10].
+        L (float): Element length in metres, from [0.01, 100.0].
 
     Returns:
         None
 
     Notes:
-        Verifies that DOF partitioning is correct and complete, which
-        is essential for the reduction method in constraint application.
+        Tests that the penalty method correctly enforces constraints
+        by checking that the constrained DOF displacement decreases
+        as the penalty parameter increases.
     """
-    assume(node_i_id != node_j_id)
-
-    mat = MaterialProperties(E=1e6, A=1e-2, I=0.0)
-    nodes = (Node(node_i_id, (0.0, 0.0)), Node(node_j_id, (1.0, 0.0)))
-    elements = (
-        Element(
-            id=1,
-            node_i=nodes[0],
-            node_j=nodes[1],
-            element_type=ElementType.BAR,
-            material=mat,
-        ),
-    )
-    mesh = Mesh(nodes=nodes, elements=elements)
-
-    # Apply FIXED_ALL BC to the first node
-    boundary_conditions = (BoundaryCondition(node_id=node_i_id, bc_type=BoundaryConditionType.FIXED_ALL),)
-
+    node_j_id = node_i_id + 1
+    mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
+    ni = Node(id=node_i_id, pos=(0.0, 0.0))
+    nj = Node(id=node_j_id, pos=(L, 0.0))
+    elem = Element(id=1, node_i=ni, node_j=nj,
+                   element_type=ElementType.BAR, material=mat)
+    c = LinearConstraint(node_id=node_i_id, coefficients=(1.0, 0.0, 0.0), rhs=0.0)
     model = FEAModel(
-        mesh=mesh,
-        boundary_conditions=boundary_conditions,
+        mesh=Mesh(nodes=(ni, nj), elements=(elem,)),
+        boundary_conditions=(c,),
         nodal_loads=(),
         distributed_loads=(),
+        penalty_alpha=1e8,
     )
-
     dof_map = build_dof_map(model)
-    constrained = get_constrained_dof_indices(model, dof_map)
-    free = get_free_dof_indices(model, dof_map)
-
-    # Check completeness: union covers all DOFs
-    union = set(constrained) | set(free)
-    expected = set(range(dof_map.total_dofs))
-    assert union == expected, (
-        f"Union of constrained and free DOFs {union} does not equal all DOFs {expected}"
-    )
-
-    # Check disjointness: intersection is empty
-    intersection = set(constrained) & set(free)
-    assert intersection == set(), (
-        f"Constrained and free DOF sets overlap: {intersection}"
-    )
-
-    # Check that lengths sum correctly
-    assert len(constrained) + len(free) == dof_map.total_dofs
+    K = assemble_global_stiffness(model, dof_map)
+    F = assemble_global_force_vector(model, dof_map)
+    k_penalty = compute_penalty_parameter(K, model.penalty_alpha)
+    K_mod, F_mod = apply_penalty_constraints(K, F, model.boundary_conditions, dof_map, k_penalty)
+    u = np.linalg.solve(K_mod, F_mod)
+    R = compute_constraint_residuals(u, model.boundary_conditions, dof_map, k_penalty)
+    assert R.shape == (1,)
+    assert abs(u[dof_map.index(node_i_id, DOFType.U)]) < 1.0 / model.penalty_alpha

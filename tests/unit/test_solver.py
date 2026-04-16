@@ -1,121 +1,129 @@
-"""Tests for displacement solver and reaction computation -- TDD first."""
+"""Tests for the penalty-method solver pipeline."""
 from __future__ import annotations
+
 import numpy as np
 import pytest
-from fea_solver.models import (
-    BoundaryCondition, BoundaryConditionType, DOFMap, DOFType,
-    Element, ElementType, FEAModel, MaterialProperties, Mesh, Node, NodalLoad, LoadType
+
+from fea_solver.assembler import (
+    assemble_global_force_vector,
+    assemble_global_stiffness,
+    build_dof_map,
 )
-from fea_solver.solver import solve_displacements, compute_reactions, run_solve_pipeline
+from fea_solver.models import (
+    DOFType,
+    Element,
+    ElementType,
+    FEAModel,
+    LinearConstraint,
+    LoadType,
+    MaterialProperties,
+    Mesh,
+    Node,
+    NodalLoad,
+    SolutionResult,
+)
+from fea_solver.solver import compute_penalty_parameter, run_solve_pipeline, solve_system
 
 
-class TestSolveDisplacements:
-    """Tests for solve_displacements."""
-    def test_single_dof_bar(self) -> None:
-        """Single DOF bar solves correctly."""
-        # K_ff = [[1.0]], F_f = [1.0] -> u_f = [1.0]
-        K_ff = np.array([[1.0]])
-        F_f = np.array([1.0])
-        u = solve_displacements(K_ff, F_f, free_dofs=[1], constrained_dofs=[0], n_total_dofs=2)
-        assert u.shape == (2,)
-        assert u[0] == pytest.approx(0.0)   # constrained DOF
-        assert u[1] == pytest.approx(1.0)   # free DOF
+def _make_cantilever_bar_model() -> FEAModel:
+    """Single bar element: E=A=L=1, fixed U at node 1, P=1 at node 2."""
+    mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
+    n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
+    elem = Element(id=1, node_i=n1, node_j=n2,
+                   element_type=ElementType.BAR, material=mat)
+    c = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0), rhs=0.0)
+    load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_X, magnitude=1.0)
+    return FEAModel(
+        mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
+        boundary_conditions=(c,),
+        nodal_loads=(load,),
+        distributed_loads=(),
+        label="cantilever_bar",
+        penalty_alpha=1e10,
+    )
 
-    def test_two_dof_bar_analytical(self) -> None:
-        """Two DOF bar matches analytical solution."""
-        # 3-node bar, E=A=L=1, P=1 at tip
-        # After fixing DOF 0: K_ff = [[2,-1],[-1,1]], F_f = [0,1]
-        # Solution: u=[1, 2] (for free DOFs 1 and 2)
-        K_ff = np.array([[2.0, -1.0], [-1.0, 1.0]])
-        F_f = np.array([0.0, 1.0])
-        u = solve_displacements(K_ff, F_f, free_dofs=[1, 2], constrained_dofs=[0], n_total_dofs=3)
-        assert u.shape == (3,)
-        assert u[0] == pytest.approx(0.0)
-        assert u[1] == pytest.approx(1.0)
-        assert u[2] == pytest.approx(2.0)
 
-    def test_singular_matrix_raises(self) -> None:
+class TestComputePenaltyParameter:
+    """Tests for compute_penalty_parameter."""
+
+    def test_scales_with_max_diagonal(self) -> None:
+        """k_penalty = penalty_alpha * max(abs(diag(K)))."""
+        K = np.diag([2.0, 5.0, 3.0])
+        k = compute_penalty_parameter(K, penalty_alpha=1e8)
+        assert k == pytest.approx(5.0e8)
+
+    def test_uses_absolute_value_of_diagonal(self) -> None:
+        """Uses abs of diagonal entries."""
+        K = np.diag([-4.0, 1.0])
+        k = compute_penalty_parameter(K, penalty_alpha=1e8)
+        assert k == pytest.approx(4.0e8)
+
+
+class TestSolveSystem:
+    """Tests for solve_system."""
+
+    def test_trivial_system(self) -> None:
+        """Solves identity system correctly."""
+        K = np.eye(3)
+        F = np.array([1.0, 2.0, 3.0])
+        u = solve_system(K, F)
+        np.testing.assert_allclose(u, F)
+
+    def test_singular_raises(self) -> None:
         """Singular matrix raises LinAlgError."""
-        K_ff = np.zeros((2, 2))
-        F_f = np.array([1.0, 1.0])
+        K = np.zeros((2, 2))
+        F = np.array([1.0, 1.0])
         with pytest.raises(np.linalg.LinAlgError):
-            solve_displacements(K_ff, F_f, free_dofs=[0, 1], constrained_dofs=[], n_total_dofs=2)
-
-    def test_constrained_dofs_are_zero_in_result(self) -> None:
-        """Constrained DOFs are zero in result."""
-        K_ff = np.array([[1.0]])
-        F_f = np.array([5.0])
-        u = solve_displacements(K_ff, F_f, free_dofs=[1], constrained_dofs=[0], n_total_dofs=2)
-        assert u[0] == pytest.approx(0.0)
-
-
-class TestComputeReactions:
-    """Tests for compute_reactions."""
-    def test_single_bar_reaction_equals_applied_load(self) -> None:
-        """Single bar reaction equals applied load."""
-        # 2-DOF bar, u=[0, 1], K = [[1,-1],[-1,1]], F=[0,1]
-        # Reaction at DOF 0: K[0,:] @ u - F[0] = (1*0 + (-1)*1) - 0 = -1
-        K = np.array([[1.0, -1.0], [-1.0, 1.0]])
-        u = np.array([0.0, 1.0])
-        F = np.array([0.0, 1.0])
-        R = compute_reactions(K, u, F, constrained_dofs=[0])
-        assert R.shape == (1,)
-        assert R[0] == pytest.approx(-1.0)
-
-    def test_equilibrium_reactions_sum_to_zero(self) -> None:
-        """Reactions satisfy equilibrium."""
-        # For a balanced system, sum of all external forces + reactions = 0
-        # Simply supported beam: two reactions + applied load = 0
-        # Here we just check |sum(R) + sum(F_applied)| is small
-        K = np.array([[1.0, -1.0, 0.0],
-                      [-1.0, 2.0, -1.0],
-                      [0.0, -1.0, 1.0]])
-        u = np.array([0.0, 1.0, 2.0])
-        F = np.array([0.0, 0.0, 1.0])
-        R = compute_reactions(K, u, F, constrained_dofs=[0])
-        # Equilibrium: sum(reactions) + sum(applied forces at free dofs) = 0
-        assert (R[0] + F[2]) == pytest.approx(0.0, abs=1e-10)
+            solve_system(K, F)
 
 
 class TestRunSolvePipeline:
     """Tests for run_solve_pipeline."""
-    def test_cantilever_bar_end_displacement(self) -> None:
-        """Cantilever bar end displacement is correct."""
-        # Single element bar: E=1, A=1, L=1, P=1 -> u_tip = 1
-        mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
-        n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
-        elem = Element(id=1, node_i=n1, node_j=n2,
-                       element_type=ElementType.BAR, material=mat)
-        bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_U)
-        load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_X, magnitude=1.0)
-        model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-                         boundary_conditions=(bc,), nodal_loads=(load,),
-                         distributed_loads=(), label="cantilever_bar")
 
-        from fea_solver.assembler import build_dof_map, assemble_global_stiffness, assemble_global_force_vector
+    def test_cantilever_bar_tip_displacement(self) -> None:
+        """Tip displacement equals P*L/(E*A) = 1.0."""
+        model = _make_cantilever_bar_model()
         dof_map = build_dof_map(model)
         K = assemble_global_stiffness(model, dof_map)
         F = assemble_global_force_vector(model, dof_map)
         result = run_solve_pipeline(model, dof_map, K, F)
-
         u_tip = result.displacements[dof_map.index(2, DOFType.U)]
-        assert u_tip == pytest.approx(1.0)
+        assert u_tip == pytest.approx(1.0, rel=1e-6)
 
     def test_returns_solution_result_type(self) -> None:
         """run_solve_pipeline returns SolutionResult."""
-        mat = MaterialProperties(E=1.0, A=1.0, I=0.0)
-        n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
-        elem = Element(id=1, node_i=n1, node_j=n2,
-                       element_type=ElementType.BAR, material=mat)
-        bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_U)
-        load = NodalLoad(node_id=2, load_type=LoadType.POINT_FORCE_X, magnitude=1.0)
-        model = FEAModel(mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-                         boundary_conditions=(bc,), nodal_loads=(load,),
-                         distributed_loads=(), label="test")
-        from fea_solver.assembler import build_dof_map, assemble_global_stiffness, assemble_global_force_vector
-        from fea_solver.models import SolutionResult
+        model = _make_cantilever_bar_model()
         dof_map = build_dof_map(model)
         K = assemble_global_stiffness(model, dof_map)
         F = assemble_global_force_vector(model, dof_map)
         result = run_solve_pipeline(model, dof_map, K, F)
         assert isinstance(result, SolutionResult)
+
+    def test_reactions_shape_matches_constraints(self) -> None:
+        """reactions array length equals number of constraints."""
+        model = _make_cantilever_bar_model()
+        dof_map = build_dof_map(model)
+        K = assemble_global_stiffness(model, dof_map)
+        F = assemble_global_force_vector(model, dof_map)
+        result = run_solve_pipeline(model, dof_map, K, F)
+        assert result.reactions.shape == (len(model.boundary_conditions),)
+
+    def test_reaction_equals_applied_load(self) -> None:
+        """For a single-constraint bar, reaction magnitude equals applied load."""
+        model = _make_cantilever_bar_model()
+        dof_map = build_dof_map(model)
+        K = assemble_global_stiffness(model, dof_map)
+        F = assemble_global_force_vector(model, dof_map)
+        result = run_solve_pipeline(model, dof_map, K, F)
+        # The pin reaction at node 1 must balance the applied load P=1
+        assert abs(result.reactions[0]) == pytest.approx(1.0, rel=1e-4)
+
+    def test_fixed_node_displacement_near_zero(self) -> None:
+        """Constrained node displacement is near zero (within penalty tolerance)."""
+        model = _make_cantilever_bar_model()
+        dof_map = build_dof_map(model)
+        K = assemble_global_stiffness(model, dof_map)
+        F = assemble_global_force_vector(model, dof_map)
+        result = run_solve_pipeline(model, dof_map, K, F)
+        u_fixed = result.displacements[dof_map.index(1, DOFType.U)]
+        assert abs(u_fixed) <= 1.0 / model.penalty_alpha
