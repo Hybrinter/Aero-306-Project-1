@@ -42,7 +42,7 @@ mesh:
     - {id:  9, node_i: 4, node_j: 8, type: truss, material: steel}
     # Diagonals (Pratt: tension diagonals slope toward center)
     - {id: 10, node_i: 1, node_j: 6, type: truss, material: steel}
-    - {id: 11, node_i: 6, node_j: 3, type: truss, material: steel}
+    - {id: 11, node_i: 2, node_j: 7, type: truss, material: steel}
     - {id: 12, node_i: 7, node_j: 4, type: truss, material: steel}
     - {id: 13, node_i: 8, node_j: 5, type: truss, material: steel}
 
@@ -50,11 +50,11 @@ materials:
   steel:
     E: 2020.0   # E = EA / A = 2020 / 1 = 2020
     A: 1.0
-    I: 0.0      # not used for truss
+    I: 0.0
 
 boundary_conditions:
-  - {node_id: 1, type: pin}       # pin: fixed U and V
-  - {node_id: 5, type: roller}    # roller: fixed V only
+  - {node_id: 1, type: roller}    # roller: fixed V only
+  - {node_id: 5, type: pin}    # pin: fixed U and V
 
 loads:
   nodal:
