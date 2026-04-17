@@ -496,3 +496,37 @@ class SolutionSeries:
     element_results: tuple[ElementResult, ...]
     model: FEAModel
     result: SolutionResult
+
+
+# ---------------------------------------------------------------------------
+# Buckling
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class MemberBuckling:
+    """Euler buckling result for one TRUSS member.
+
+    Fields:
+        element_id (int): Identifier of the TRUSS element this result belongs to.
+        P_cr (float): Euler critical load pi^2 * E * I / L^2 [force units].
+            Always positive.
+        axial_force (float): Signed axial force [force units] copied from
+            ElementResult.axial_force. Positive = tension, negative = compression.
+        ratio (float): abs(axial_force) / P_cr when axial_force < 0; 0.0 when
+            axial_force >= 0. Dimensionless.
+        is_buckled (bool): True iff axial_force < 0 and abs(axial_force) >= P_cr.
+
+    Notes:
+        Frozen and slotted; immutable after construction. Produced only for
+        elements with element_type == TRUSS. Tension members are included in
+        the returned tuple with ratio = 0.0 and is_buckled = False so that the
+        downstream reporter can distinguish TENSION from SAFE compressive
+        members by the sign of axial_force.
+    """
+
+    element_id: int
+    P_cr: float
+    axial_force: float
+    ratio: float
+    is_buckled: bool
