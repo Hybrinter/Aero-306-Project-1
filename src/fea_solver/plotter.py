@@ -680,11 +680,15 @@ def plot_truss_deformed(
             if chord > 0.0:
                 cos_a = dx / chord
                 sin_a = dy / chord
+                # Amplitude tied to undeformed length (not deformed chord) so
+                # the overlay size does not scale with the displacement scale
+                # factor. Perpendicular direction (-sin_a, cos_a) bulges to the
+                # left of the chord by convention.
                 amp = 0.1 * element.length
                 xi = np.linspace(0.0, 1.0, 30)
                 bow = amp * np.sin(np.pi * xi)
                 bx = x_i_def + xi * dx + bow * (-sin_a)
-                by = y_i_def + xi * dy + bow * ( cos_a)
+                by = y_i_def + xi * dy + bow * (cos_a)
                 ax.plot(bx, by, color="black", linestyle="--",
                         linewidth=1.5, zorder=4)
 

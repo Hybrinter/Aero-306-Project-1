@@ -622,13 +622,20 @@ class TestTrussDeformedWithBuckling:
             ratio=2.0, is_buckled=True,
         )
         fig1 = plot_truss_deformed(sol, buckling=(mb,))
-        n1 = len(fig1.axes[0].get_lines())
+        lines = fig1.axes[0].get_lines()
+        n1 = len(lines)
+        dashed = [ln for ln in lines if ln.get_linestyle() == "--"]
         plt.close(fig1)
 
         assert n1 == n0 + 1, (
             f"Expected one extra Line2D for the buckled bow "
             f"(baseline {n0}, with overlay {n1})."
         )
+        assert len(dashed) == 1
+        bow = dashed[0]
+        assert bow.get_color() == "black"
+        assert bow.get_linewidth() == 1.5
+        assert bow.get_zorder() == 4
 
     def test_non_buckled_entry_adds_no_overlay(self) -> None:
         """A MemberBuckling with is_buckled=False produces no extra lines."""
