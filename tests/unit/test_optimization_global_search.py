@@ -1,6 +1,7 @@
 """Unit tests for DE and CMA-ES global search runners."""
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -65,3 +66,22 @@ def test_run_cmaes_smoke(tmp_path: Path) -> None:
     assert sr.best_x.shape == (12,)
     assert sr.best_penalty >= 0.0
     assert (tmp_path / "cmaes_seed_1.json").exists()
+
+
+def test_run_cmaes_with_restarts_does_not_raise(tmp_path: Path) -> None:
+    """run_cmaes with restarts > 0 must correctly unpack cma.fmin2 -> (xbest, es)."""
+    from fea_solver.optimization.global_search import run_cmaes
+    problem = _problem()
+    sr = run_cmaes(
+        problem=problem,
+        seed=0,
+        popsize=6,
+        maxiter=3,
+        sigma0=1.0,
+        restarts=1,
+        incpopsize=2,
+        checkpoint_path=tmp_path / "cma_seed.json",
+    )
+    assert sr.algorithm == "CMA-ES"
+    assert sr.best_x.shape == (12,)
+    assert math.isfinite(sr.best_penalty)

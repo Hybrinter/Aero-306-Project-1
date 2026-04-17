@@ -154,6 +154,8 @@ def run_cmaes(
     Notes:
         x0 is sampled from a uniform distribution over the bound box, seeded
         by the RNG seed, so different seeds explore different basins.
+        Uses cma.fmin2 which returns (xbest, es); derived values such as
+        fbest are read from es.result, not from positional return values.
     """
     import cma  # local import keeps the new dep out of import-time graph
 
@@ -188,11 +190,12 @@ def run_cmaes(
         return penalized_objective(np.asarray(x, dtype=np.float64), problem, weights)
 
     if restarts > 0:
-        x_best, f_best, _evals, _iters, _es = cma.fmin2(
+        x_best, es = cma.fmin2(
             fun, x0, sigma0, options=opts,
             restarts=restarts, incpopsize=incpopsize,
             bipop=False,
         )
+        f_best = float(es.result.fbest) if es.result.fbest is not None else fun(x_best)
     else:
         es = cma.CMAEvolutionStrategy(x0, sigma0, opts)
         gen = 0
