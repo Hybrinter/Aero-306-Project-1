@@ -208,6 +208,67 @@ class TestPlotTrussForces:
         plt.close(fig)
 
 
+class TestPlotTrussDeformed:
+    """Tests for plot_truss_deformed."""
+
+    def test_returns_figure(self) -> None:
+        """plot_truss_deformed returns a matplotlib Figure."""
+        from fea_solver.plotter import plot_truss_deformed
+        fig = plot_truss_deformed(_make_truss_series())
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """plot_truss_deformed saves PNG when output_path given."""
+        from fea_solver.plotter import plot_truss_deformed
+        out = tmp_path / "deformed.png"
+        fig = plot_truss_deformed(_make_truss_series(), output_path=out)
+        assert out.exists()
+        plt.close(fig)
+
+    def test_scale_factor_in_title(self) -> None:
+        """Scale factor string appears in the plot title."""
+        from fea_solver.plotter import plot_truss_deformed
+        fig = plot_truss_deformed(_make_truss_series(), title="Deformed")
+        title_text = fig.axes[0].get_title()
+        assert "scale" in title_text
+        assert "x" in title_text
+        plt.close(fig)
+
+    def test_has_colorbar(self) -> None:
+        """plot_truss_deformed figure contains a colorbar axes."""
+        from fea_solver.plotter import plot_truss_deformed
+        fig = plot_truss_deformed(_make_truss_series())
+        assert len(fig.axes) >= 2
+        plt.close(fig)
+
+    def test_zero_displacement_no_crash(self) -> None:
+        """plot_truss_deformed handles zero displacement (scale fallback to 1.0)."""
+        from fea_solver.plotter import plot_truss_deformed
+        model = _make_truss_model()
+        dof_map = build_dof_map(model)
+        result_zero = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs),
+            reactions=np.zeros(0),
+            dof_map=dof_map,
+            model=model,
+        )
+        er = ElementResult(
+            element_id=1,
+            axial_force=0.0,
+            shear_forces=np.zeros(5),
+            bending_moments=np.zeros(5),
+            x_stations=np.linspace(0.0, 3.0, 5),
+            transverse_displacements=np.zeros(5),
+            axial_displacements=np.zeros(5),
+            rotations=np.zeros(5),
+        )
+        sol = SolutionSeries(label="zero", element_results=(er,), model=model, result=result_zero)
+        fig = plot_truss_deformed(sol)
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+
 class TestPlotShearForceDiagram:
     """Tests for plot_shear_force_diagram."""
 

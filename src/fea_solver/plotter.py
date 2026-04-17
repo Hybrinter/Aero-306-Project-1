@@ -590,6 +590,98 @@ def plot_truss_forces(
     return fig
 
 
+def plot_truss_deformed(
+    sol: SolutionSeries,
+    title: str = "Truss Deformed Shape",
+    output_path: Path | None = None,
+) -> plt.Figure:
+    """Plot 2D truss geometry in its deformed state with coolwarm gradient by axial force.
+
+    Node positions are shifted by (scale * U, scale * V) where scale is chosen
+    automatically so the largest displacement equals 10% of the bounding-box
+    diagonal. The scale factor is appended to the plot title.
+
+    Args:
+        sol (SolutionSeries): Solution bundle. sol.result.displacements provides
+            nodal translations; sol.element_results provides axial forces for color.
+        title (str): Base plot title. Scale factor is appended automatically.
+            Default "Truss Deformed Shape".
+        output_path (Path | None): If provided, save figure to this path as PNG.
+
+    Returns:
+        plt.Figure: The matplotlib Figure.
+
+    Notes:
+        Scale factor formula: scale = 0.1 * bbox_diagonal / max_abs_displacement.
+        Falls back to scale = 1.0 when all displacements are zero.
+        bbox_diagonal = hypot(max_x - min_x, max_y - min_y) over original node coords.
+        If output_path is provided, saves figure at 150 dpi.
+    """
+    model = sol.model
+    lbl = _unit_labels(model)
+    result_by_id = {er.element_id: er for er in sol.element_results}
+    nodes_by_id = {n.id: n for n in model.mesh.nodes}
+    node_disps = _truss_node_displacements(sol)
+
+    # Auto-compute displacement scale factor
+    xs = np.array([n.x for n in model.mesh.nodes])
+    ys = np.array([n.y for n in model.mesh.nodes])
+    bbox_diag = float(np.hypot(float(xs.max() - xs.min()), float(ys.max() - ys.min())))
+    if bbox_diag == 0.0:
+        bbox_diag = 1.0
+    all_disp_mags = [abs(d) for U, V in node_disps.values() for d in (U, V)]
+    max_disp = max(all_disp_mags) if all_disp_mags else 0.0
+    scale = 0.1 * bbox_diag / max_disp if max_disp > 0.0 else 1.0
+
+    forces = [
+        result_by_id[e.id].axial_force if e.id in result_by_id else 0.0
+        for e in model.mesh.elements
+    ]
+    cmap, norm = _truss_colormap_norm(forces)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    for element, N in zip(model.mesh.elements, forces):
+        n_i = nodes_by_id[element.node_i.id]
+        n_j = nodes_by_id[element.node_j.id]
+        U_i, V_i = node_disps[n_i.id]
+        U_j, V_j = node_disps[n_j.id]
+        x_i_def = n_i.x + scale * U_i
+        y_i_def = n_i.y + scale * V_i
+        x_j_def = n_j.x + scale * U_j
+        y_j_def = n_j.y + scale * V_j
+        color = cmap(norm(N))
+        ax.plot([x_i_def, x_j_def], [y_i_def, y_j_def], color=color, linewidth=2.5)
+        mid_x = (x_i_def + x_j_def) / 2.0
+        mid_y = (y_i_def + y_j_def) / 2.0
+        ax.text(mid_x, mid_y, f"{N:.3g}", fontsize=7, ha="center", va="bottom",
+                color="black")
+
+    for node in model.mesh.nodes:
+        U, V = node_disps[node.id]
+        x_def = node.x + scale * U
+        y_def = node.y + scale * V
+        ax.plot(x_def, y_def, "ko", markersize=4, zorder=5)
+        ax.text(x_def, y_def, f" {node.id}", fontsize=8, va="bottom")
+
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.colorbar(sm, ax=ax, label=f"N [{lbl['force']}]")
+
+    ax.set_xlabel(f"x [{lbl['length']}]")
+    ax.set_ylabel(f"y [{lbl['length']}]")
+    ax.set_title(f"{title} (scale {scale:.2g}x)")
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        logger.info("Truss deformed plot saved to %s", output_path)
+
+    return fig
+
+
 def show_all_plots(figures: list[plt.Figure]) -> None:
     """Display all figures. Call plt.show() once after all figures are ready.
 
