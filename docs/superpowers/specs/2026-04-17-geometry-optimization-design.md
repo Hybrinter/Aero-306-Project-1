@@ -123,10 +123,13 @@ tests/integration/
 - Modules under `src/fea_solver/optimization/` import only from the FEA
   solver core (`assembler`, `solver`, `postprocessor`, `buckling`, `models`,
   `io_yaml`).
-- Modules under `src/fea_solver/optimization/` MUST NOT import `plotter`,
-  `reporter`, or any presentation-layer module.
+- Modules under `src/fea_solver/optimization/` MUST NOT import the
+  existing `src/fea_solver/plotter.py` or `src/fea_solver/reporter.py`.
+  The new `optimization/report.py` is allowed because it writes a
+  self-contained markdown file with no dependency on the existing
+  Rich-table reporter.
 - The CLI script (`scripts/optimize_geometry.py`) is the only place that
-  wires optimization output to the existing plotter and reporter.
+  wires optimization output to the existing plotter and Rich reporter.
 
 ### New runtime dependency
 
@@ -349,6 +352,9 @@ the 15 N load magnitude updated. Verifying the optimizer is then just
 `uv run python main.py optimization_runs/<run_id>/best_design.yaml`.
 
 ### `report.md` template
+
+All numeric values shown in the template below are illustrative; the
+generator fills them in from the actual `EnsembleResult` at runtime.
 
 ```markdown
 # Geometry Optimization Report -- <run_id>
