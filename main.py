@@ -22,10 +22,10 @@ from fea_solver.assembler import (
     assemble_global_stiffness,
     build_dof_map,
 )
+from fea_solver.buckling import compute_truss_buckling
 from fea_solver.io_yaml import load_models_from_yaml
 from fea_solver.logging_config import configure_logging
-from fea_solver.models import SolutionSeries
-from fea_solver.models import ElementType
+from fea_solver.models import ElementType, SolutionSeries
 from fea_solver.plotter import (
     plot_axial_displacement,
     plot_bending_moment_diagram,
@@ -37,7 +37,6 @@ from fea_solver.plotter import (
     plot_truss_stress,
     show_all_plots,
 )
-from fea_solver.buckling import compute_truss_buckling
 from fea_solver.postprocessor import postprocess_all_elements
 from fea_solver.reporter import (
     generate_report,
