@@ -45,3 +45,23 @@ def test_run_de_smoke(tmp_path: Path) -> None:
     assert len(sr.history) >= 1
     assert sr.wall_clock_s > 0.0
     assert (tmp_path / "de_seed_0.json").exists()
+
+
+def test_run_cmaes_smoke(tmp_path: Path) -> None:
+    """Smoke test: run_cmaes returns a valid SeedResult and writes checkpoint."""
+    from fea_solver.optimization.global_search import run_cmaes
+    problem = _problem()
+    sr = run_cmaes(
+        problem=problem,
+        seed=1,
+        popsize=6,
+        maxiter=3,
+        sigma0=2.0,
+        restarts=0,
+        checkpoint_path=tmp_path / "cmaes_seed_1.json",
+    )
+    assert sr.algorithm == "CMA-ES"
+    assert sr.seed == 1
+    assert sr.best_x.shape == (12,)
+    assert sr.best_penalty >= 0.0
+    assert (tmp_path / "cmaes_seed_1.json").exists()
