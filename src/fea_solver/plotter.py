@@ -33,10 +33,12 @@ import logging
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import Colormap, TwoSlopeNorm
+from matplotlib.cm import ScalarMappable
 from matplotlib.lines import Line2D
 import numpy as np
 
-from fea_solver.models import ElementResult, FEAModel, SolutionSeries
+from fea_solver.models import DOFType, ElementResult, FEAModel, SolutionSeries
 from fea_solver.units import UNIT_LABELS
 
 logger = logging.getLogger(__name__)
@@ -152,6 +154,60 @@ def _plot_extremes(
             marker="s", color=color, markersize=7, linestyle="none", zorder=5,
             label=f"{prefix}min = {y[min_idx]:{fmt}}",
         )
+
+
+def _truss_colormap_norm(values: list[float]) -> tuple[Colormap, TwoSlopeNorm]:
+    """Return a coolwarm Colormap and a TwoSlopeNorm centered at zero.
+
+    The norm is symmetric: vmin = -max_abs, vcenter = 0, vmax = max_abs.
+    Falls back to vmin=-1, vmax=1 when all values are zero to avoid a
+    degenerate norm.
+
+    Args:
+        values (list[float]): Scalar values to be represented (e.g. axial forces
+            or stresses). May contain positive, negative, or zero entries.
+
+    Returns:
+        tuple[Colormap, TwoSlopeNorm]: The coolwarm colormap and the norm.
+
+    Notes:
+        Tension (positive) maps to the red end; compression (negative) maps to
+        the blue end of coolwarm. The symmetric range ensures zero always maps
+        to the neutral white midpoint regardless of force sign distribution.
+    """
+    max_abs = max((abs(v) for v in values), default=0.0)
+    if max_abs == 0.0:
+        max_abs = 1.0
+    cmap: Colormap = plt.cm.get_cmap("coolwarm")
+    norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0.0, vmax=max_abs)
+    return cmap, norm
+
+
+def _truss_node_displacements(sol: SolutionSeries) -> dict[int, tuple[float, float]]:
+    """Extract per-node (U, V) global displacements from a SolutionSeries.
+
+    Args:
+        sol (SolutionSeries): Solution bundle whose result.displacements and
+            result.dof_map are used to recover nodal translations.
+
+    Returns:
+        dict[int, tuple[float, float]]: Maps node_id to (U, V) displacement tuple
+            in the model's canonical length units. All nodes in sol.model.mesh.nodes
+            are present as keys.
+
+    Notes:
+        TRUSS elements always carry both U and V DOFs at every node, so this
+        function is safe for all truss meshes. Using it on non-truss models
+        (BAR, BEAM) that lack U or V DOFs will raise KeyError.
+    """
+    u_vec = sol.result.displacements
+    dof_map = sol.result.dof_map
+    disps: dict[int, tuple[float, float]] = {}
+    for node in sol.model.mesh.nodes:
+        U = float(u_vec[dof_map.index(node.id, DOFType.U)])
+        V = float(u_vec[dof_map.index(node.id, DOFType.V)])
+        disps[node.id] = (U, V)
+    return disps
 
 
 def plot_shear_force_diagram(

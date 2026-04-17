@@ -83,6 +83,91 @@ def _make_series(
     return SolutionSeries(label=label, element_results=(er,), model=model, result=result_stub)
 
 
+def _make_truss_model() -> FEAModel:
+    """Build a minimal two-node TRUSS FEAModel for truss plotter tests."""
+    mat = MaterialProperties(E=200e9, A=0.01, I=0.0)
+    n1 = Node(1, (0.0, 0.0))
+    n2 = Node(2, (3.0, 4.0))
+    elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.TRUSS, material=mat)
+    c1 = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0))
+    c2 = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+    return FEAModel(
+        mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
+        boundary_conditions=(c1, c2),
+        nodal_loads=(),
+        distributed_loads=(),
+        label="test_truss",
+    )
+
+
+def _make_truss_series(axial_force: float = 50.0) -> SolutionSeries:
+    """Build a SolutionSeries with a single TRUSS ElementResult."""
+    model = _make_truss_model()
+    dof_map = build_dof_map(model)
+    # TRUSS 2-node: DOFs are (node1,U)=0, (node1,V)=1, (node2,U)=2, (node2,V)=3
+    u = np.zeros(dof_map.total_dofs)
+    u[dof_map.index(2, DOFType.U)] = 0.001
+    u[dof_map.index(2, DOFType.V)] = -0.002
+    result = SolutionResult(
+        displacements=u,
+        reactions=np.zeros(0),
+        dof_map=dof_map,
+        model=model,
+    )
+    er = ElementResult(
+        element_id=1,
+        axial_force=axial_force,
+        shear_forces=np.zeros(5),
+        bending_moments=np.zeros(5),
+        x_stations=np.linspace(0.0, 3.0, 5),
+        transverse_displacements=np.zeros(5),
+        axial_displacements=np.zeros(5),
+        rotations=np.zeros(5),
+    )
+    return SolutionSeries(label="test", element_results=(er,), model=model, result=result)
+
+
+class TestTrussHelpers:
+    """Tests for private truss plotting helpers."""
+
+    def test_colormap_norm_symmetric_range(self) -> None:
+        """Norm vmin and vmax are symmetric about zero."""
+        from fea_solver.plotter import _truss_colormap_norm
+        cmap, norm = _truss_colormap_norm([10.0, -5.0, 3.0])
+        assert norm.vmax == pytest.approx(10.0)
+        assert norm.vmin == pytest.approx(-10.0)
+        assert norm.vcenter == pytest.approx(0.0)
+
+    def test_colormap_norm_all_zero_fallback(self) -> None:
+        """All-zero values use fallback norm vmin=-1, vmax=1."""
+        from fea_solver.plotter import _truss_colormap_norm
+        cmap, norm = _truss_colormap_norm([0.0, 0.0])
+        assert norm.vmax == pytest.approx(1.0)
+        assert norm.vmin == pytest.approx(-1.0)
+
+    def test_colormap_returns_coolwarm(self) -> None:
+        """Returned colormap is coolwarm."""
+        from fea_solver.plotter import _truss_colormap_norm
+        cmap, _ = _truss_colormap_norm([1.0])
+        assert "coolwarm" in cmap.name
+
+    def test_node_displacements_keys(self) -> None:
+        """Node displacement dict has an entry for every node."""
+        from fea_solver.plotter import _truss_node_displacements
+        sol = _make_truss_series()
+        disps = _truss_node_displacements(sol)
+        assert set(disps.keys()) == {1, 2}
+
+    def test_node_displacements_values(self) -> None:
+        """Extracted displacements match what was put into the displacement vector."""
+        from fea_solver.plotter import _truss_node_displacements
+        sol = _make_truss_series()
+        disps = _truss_node_displacements(sol)
+        assert disps[1] == pytest.approx((0.0, 0.0))
+        assert disps[2][0] == pytest.approx(0.001)
+        assert disps[2][1] == pytest.approx(-0.002)
+
+
 class TestPlotShearForceDiagram:
     """Tests for plot_shear_force_diagram."""
 
