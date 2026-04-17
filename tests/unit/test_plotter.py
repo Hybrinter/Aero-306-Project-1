@@ -168,6 +168,46 @@ class TestTrussHelpers:
         assert disps[2][1] == pytest.approx(-0.002)
 
 
+class TestPlotTrussForces:
+    """Tests for plot_truss_forces."""
+
+    def test_returns_figure(self) -> None:
+        """plot_truss_forces returns a matplotlib Figure."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series())
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """plot_truss_forces saves a PNG when output_path is given."""
+        from fea_solver.plotter import plot_truss_forces
+        out = tmp_path / "forces.png"
+        fig = plot_truss_forces(_make_truss_series(), output_path=out)
+        assert out.exists()
+        plt.close(fig)
+
+    def test_has_colorbar(self) -> None:
+        """plot_truss_forces figure contains a colorbar axes."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series())
+        assert len(fig.axes) >= 2
+        plt.close(fig)
+
+    def test_title_set(self) -> None:
+        """Custom title is applied to the axes."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series(), title="My Forces")
+        assert fig.axes[0].get_title() == "My Forces"
+        plt.close(fig)
+
+    def test_compression_series_no_crash(self) -> None:
+        """plot_truss_forces handles all-compression (negative) forces."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series(axial_force=-80.0))
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+
 class TestPlotShearForceDiagram:
     """Tests for plot_shear_force_diagram."""
 

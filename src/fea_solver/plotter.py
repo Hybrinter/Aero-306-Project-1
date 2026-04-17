@@ -17,15 +17,19 @@ Provides:
   - plot_transverse_displacement:   v(x) with physical units on both axes
   - plot_axial_displacement:        u(x) with physical units on both axes
   - plot_rotation:                  theta(x) in radians
-  - plot_truss_axial_forces:        2D wireframe with color-coded member forces (tension/compression)
+  - plot_truss_forces:              2D undeformed wireframe colored by axial force gradient
+  - plot_truss_deformed:            2D deformed wireframe with auto-scale, colored by axial force
+  - plot_truss_stress:              2D undeformed wireframe colored by axial stress (N/A) gradient
   - show_all_plots:                 plt.show() wrapper
 
-_SERIES_COLORS:         List of hex color strings cycled across multiple series.
-_SERIES_LINESTYLES:     List of line style strings cycled across multiple series
-                        (solid, dashed, dash-dot, dotted) for greyscale legibility.
-_concatenate_diagrams:  Sorts and concatenates x, V, M, v, u, theta across elements.
-_unit_labels:           Returns UNIT_LABELS dict for the model's unit system.
-_plot_extremes:         Adds max/min markers with legend entries to an Axes.
+_SERIES_COLORS:             List of hex color strings cycled across multiple series.
+_SERIES_LINESTYLES:         List of line style strings cycled across multiple series
+                            (solid, dashed, dash-dot, dotted) for greyscale legibility.
+_concatenate_diagrams:      Sorts and concatenates x, V, M, v, u, theta across elements.
+_unit_labels:               Returns UNIT_LABELS dict for the model's unit system.
+_plot_extremes:             Adds max/min markers with legend entries to an Axes.
+_truss_colormap_norm:       Returns coolwarm Colormap + TwoSlopeNorm centered at zero.
+_truss_node_displacements:  Extracts per-node (U, V) from SolutionSeries.result.
 """
 from __future__ import annotations
 
@@ -35,7 +39,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.colors import Colormap, TwoSlopeNorm
 from matplotlib.cm import ScalarMappable
-from matplotlib.lines import Line2D
 import numpy as np
 
 from fea_solver.models import DOFType, ElementResult, FEAModel, SolutionSeries
@@ -518,18 +521,20 @@ def plot_rotation(
     return fig
 
 
-def plot_truss_axial_forces(
+def plot_truss_forces(
     sol: SolutionSeries,
     title: str = "Truss Member Forces",
     output_path: Path | None = None,
 ) -> plt.Figure:
-    """Plot 2D truss geometry with color-coded member axial forces.
+    """Plot 2D truss geometry (undeformed) with coolwarm gradient coloring by axial force.
 
-    Members in tension are drawn in blue; members in compression are drawn in red.
-    Each member is annotated with its axial force value at midpoint.
+    Members are colored on a continuous diverging scale: blue for compression
+    (N < 0), white for zero force, red for tension (N > 0). A colorbar shows
+    the force scale. Each member is annotated at its midpoint with the numeric
+    force value.
 
     Args:
-        sol (SolutionSeries): Single solution bundle containing element results and model.
+        sol (SolutionSeries): Solution bundle containing element results and model.
         title (str): Plot title. Default "Truss Member Forces".
         output_path (Path | None): If provided, save figure to this path as PNG.
 
@@ -537,45 +542,39 @@ def plot_truss_axial_forces(
         plt.Figure: The matplotlib Figure.
 
     Notes:
-        Node coordinates are taken from model.mesh nodes. Positive axial force (tension)
-        produces blue members; negative (compression) produces red members.
+        Node coordinates are the original (undeformed) positions.
         If output_path is provided, saves figure at 150 dpi.
     """
     model = sol.model
     lbl = _unit_labels(model)
-
-    # Build element id -> ElementResult lookup
     result_by_id = {er.element_id: er for er in sol.element_results}
     nodes_by_id = {n.id: n for n in model.mesh.nodes}
 
+    forces = [
+        result_by_id[e.id].axial_force if e.id in result_by_id else 0.0
+        for e in model.mesh.elements
+    ]
+    cmap, norm = _truss_colormap_norm(forces)
+
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    for element in model.mesh.elements:
+    for element, N in zip(model.mesh.elements, forces):
         n_i = nodes_by_id[element.node_i.id]
         n_j = nodes_by_id[element.node_j.id]
-        er = result_by_id.get(element.id)
-        N = er.axial_force if er is not None else 0.0
-
-        color = "#1f77b4" if N >= 0.0 else "#d62728"  # blue=tension, red=compression
-        ax.plot([n_i.x, n_j.x], [n_i.y, n_j.y], color=color, linewidth=2.0)
-
-        # Annotate midpoint with force value
+        color = cmap(norm(N))
+        ax.plot([n_i.x, n_j.x], [n_i.y, n_j.y], color=color, linewidth=2.5)
         mid_x = (n_i.x + n_j.x) / 2.0
         mid_y = (n_i.y + n_j.y) / 2.0
         ax.text(mid_x, mid_y, f"{N:.3g}", fontsize=7, ha="center", va="bottom",
-                color=color)
+                color="black")
 
-    # Draw nodes
     for node in model.mesh.nodes:
         ax.plot(node.x, node.y, "ko", markersize=4, zorder=5)
         ax.text(node.x, node.y, f" {node.id}", fontsize=8, va="bottom")
 
-    # Legend entries for tension/compression
-    legend_elements = [
-        Line2D([0], [0], color="#1f77b4", linewidth=2, label="Tension (N > 0)"),
-        Line2D([0], [0], color="#d62728", linewidth=2, label="Compression (N < 0)"),
-    ]
-    ax.legend(handles=legend_elements, loc="best", fontsize=8)
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.colorbar(sm, ax=ax, label=f"N [{lbl['force']}]")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"y [{lbl['length']}]")
@@ -586,7 +585,7 @@ def plot_truss_axial_forces(
 
     if output_path is not None:
         fig.savefig(output_path, dpi=150, bbox_inches="tight")
-        logger.info("Truss plot saved to %s", output_path)
+        logger.info("Truss forces plot saved to %s", output_path)
 
     return fig
 
