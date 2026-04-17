@@ -109,7 +109,10 @@ When `buckling` is `None` the function behaves identically to today
 2. Compute the deformed-member axis unit vector `(cos_a, sin_a)` from
    deformed endpoint coordinates and its unit perpendicular
    `(-sin_a, cos_a)`.
-3. Amplitude `A = 0.1 * L_def` where `L_def` is the deformed chord length.
+3. Amplitude `A = 0.1 * element.length` (original undeformed length;
+   deformed chord is within ~1% for realistic strains and the fixed
+   undeformed value avoids coupling overlay size to the displacement
+   scale factor).
 4. Plot curve
        `x(xi) = x_i_def + xi * (x_j_def - x_i_def) + A * sin(pi*xi) * (-sin_a)`
        `y(xi) = y_i_def + xi * (y_j_def - y_i_def) + A * sin(pi*xi) * (cos_a)`
