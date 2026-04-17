@@ -13,6 +13,9 @@ Key types:
   ElementResult: internal forces, moments, and displacements at sampling stations.
   SolutionSeries: bundle of ElementResults + model for one named mesh refinement;
       used when overlaying multiple solutions on shared plot axes.
+  MemberBuckling: per-element Euler buckling result (P_cr, axial force, ratio,
+      buckled flag); tension members carry ratio = 0.0 to allow sign-based
+      TENSION vs SAFE discrimination downstream.
 """
 
 from __future__ import annotations
