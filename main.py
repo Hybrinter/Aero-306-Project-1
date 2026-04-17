@@ -37,9 +37,11 @@ from fea_solver.plotter import (
     plot_truss_stress,
     show_all_plots,
 )
+from fea_solver.buckling import compute_truss_buckling
 from fea_solver.postprocessor import postprocess_all_elements
 from fea_solver.reporter import (
     generate_report,
+    print_buckling_summary,
     print_dof_table,
     print_element_forces,
     print_nodal_results,
@@ -253,9 +255,12 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if all_truss:
-            # 2D truss: three gradient plots per solution (overlay not meaningful)
+            # 2D truss: three gradient plots per solution + buckling overlay/summary.
             for sol in all_series:
                 safe_sol = _sanitize_label(sol.label)
+
+                bucklings = compute_truss_buckling(sol.model, sol.element_results)
+                print_buckling_summary(bucklings, sol.model)
 
                 forces_path = (save_dir / f"{safe_sol}_truss_forces.png") if save_dir else None
                 figures.append(
@@ -268,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
                 figures.append(
                     plot_truss_deformed(sol,
                                         title=f"Truss Deformed: {sol.label}",
-                                        output_path=deformed_path)
+                                        output_path=deformed_path,
+                                        buckling=bucklings)
                 )
 
                 stress_path = (save_dir / f"{safe_sol}_truss_stress.png") if save_dir else None
