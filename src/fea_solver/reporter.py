@@ -12,6 +12,7 @@ _lbl: Returns unit-label dict for a model's unit system.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 import numpy as np
 from rich.console import Console
@@ -289,7 +290,7 @@ def generate_report(
 
 
 def print_buckling_summary(
-    bucklings: tuple[MemberBuckling, ...],
+    bucklings: Sequence[MemberBuckling],
     model: FEAModel,
 ) -> None:
     """Print a rich table summarizing Euler buckling status per TRUSS member.
@@ -302,8 +303,9 @@ def print_buckling_summary(
         Status       -- BUCKLED (bold red) / SAFE (green) / TENSION (dim)
 
     Args:
-        bucklings (tuple[MemberBuckling, ...]): Output of compute_truss_buckling.
-            Empty tuple produces no output at all.
+        bucklings (Sequence[MemberBuckling]): Output of compute_truss_buckling
+            (a tuple) or any other sequence of MemberBuckling. Empty sequence
+            produces no output at all.
         model (FEAModel): Used for the force-unit label in column headers.
 
     Returns:
@@ -328,10 +330,10 @@ def print_buckling_summary(
     for mb in bucklings:
         if mb.is_buckled:
             status = "[bold red]BUCKLED[/bold red]"
-        elif mb.axial_force < 0.0:
-            status = "[green]SAFE[/green]"
-        else:
+        elif mb.axial_force >= 0.0:
             status = "[dim]TENSION[/dim]"
+        else:
+            status = "[green]SAFE[/green]"
         table.add_row(
             str(mb.element_id),
             f"{mb.axial_force:.3e}",
