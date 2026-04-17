@@ -159,6 +159,8 @@ class TestComputeTrussBuckling:
         by_id = {mb.element_id: mb for mb in bucklings}
         assert by_id[1].is_buckled is False
         assert by_id[1].ratio == pytest.approx(0.5)
+        assert by_id[2].is_buckled is False
+        assert by_id[2].ratio == pytest.approx(0.0)
 
     def test_tension_marked_safe(self) -> None:
         """Positive N produces ratio=0.0 and is_buckled=False irrespective of magnitude."""
@@ -172,6 +174,7 @@ class TestComputeTrussBuckling:
         for mb in bucklings:
             assert mb.ratio == 0.0
             assert mb.is_buckled is False
+            assert mb.axial_force > 0.0
 
     def test_exactly_critical_compressive_is_buckled(self) -> None:
         """N = -P_cr (equality) marks is_buckled True; ratio = 1.0 exactly."""
