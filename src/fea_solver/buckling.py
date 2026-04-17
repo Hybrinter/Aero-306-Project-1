@@ -61,3 +61,62 @@ def compute_member_P_cr(element: Element) -> float:
     logger.debug("Element %d: P_cr = %.4e (E=%.3e, I=%.3e, L=%.3e)",
                  element.id, P_cr, E, I, L)
     return float(P_cr)
+
+
+def compute_truss_buckling(
+    model: FEAModel,
+    element_results: Sequence[ElementResult],
+) -> tuple[MemberBuckling, ...]:
+    """Classify every TRUSS element's buckling status.
+
+    For each element with element_type == TRUSS, compute P_cr via
+    compute_member_P_cr, look up the matching ElementResult by element_id,
+    and build a MemberBuckling. Non-TRUSS elements and elements without a
+    matching ElementResult are skipped silently.
+
+    Args:
+        model (FEAModel): FEA problem containing the mesh.
+        element_results (Sequence[ElementResult]): Post-processed results
+            (typically from postprocess_all_elements). Only axial_force is read.
+
+    Returns:
+        tuple[MemberBuckling, ...]: One entry per TRUSS element in the same
+            order as model.mesh.elements. Empty tuple if no TRUSS elements
+            are present.
+
+    Notes:
+        Classification rules (|N| = abs(axial_force)):
+          * axial_force >= 0  -> ratio = 0.0, is_buckled = False (tension/zero).
+          * axial_force <  0  -> ratio = |N| / P_cr,
+                                 is_buckled = (|N| >= P_cr).
+        Tension members are retained in the tuple so the reporter can distinguish
+        TENSION from SAFE compressive members by sign.
+    """
+    result_by_id: dict[int, ElementResult] = {er.element_id: er for er in element_results}
+    out: list[MemberBuckling] = []
+    for element in model.mesh.elements:
+        if element.element_type != ElementType.TRUSS:
+            continue
+        er = result_by_id.get(element.id)
+        if er is None:
+            continue
+        P_cr = compute_member_P_cr(element)
+        N = er.axial_force
+        if N < 0.0:
+            ratio = abs(N) / P_cr
+            is_buckled = abs(N) >= P_cr
+        else:
+            ratio = 0.0
+            is_buckled = False
+        out.append(MemberBuckling(
+            element_id=element.id,
+            P_cr=P_cr,
+            axial_force=float(N),
+            ratio=float(ratio),
+            is_buckled=is_buckled,
+        ))
+        logger.debug(
+            "Element %d: P_cr=%.4e, N=%.4e, ratio=%.3f, buckled=%s",
+            element.id, P_cr, N, ratio, is_buckled,
+        )
+    return tuple(out)
