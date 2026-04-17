@@ -40,6 +40,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.colors import Colormap, TwoSlopeNorm
 from matplotlib.cm import ScalarMappable
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 
 from fea_solver.models import DOFType, ElementResult, FEAModel, MemberBuckling, SolutionSeries
@@ -575,7 +576,9 @@ def plot_truss_forces(
 
     sm = ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-    fig.colorbar(sm, ax=ax, label=f"N [{lbl['force']}]")
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+    fig.colorbar(sm, cax=cax, label=f"N [{lbl['force']}]")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"y [{lbl['length']}]")
@@ -701,7 +704,9 @@ def plot_truss_deformed(
 
     sm = ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-    fig.colorbar(sm, ax=ax, label=f"N [{lbl['force']}]")
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+    fig.colorbar(sm, cax=cax, label=f"N [{lbl['force']}]")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"y [{lbl['length']}]")
@@ -774,7 +779,9 @@ def plot_truss_stress(
 
     sm = ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-    fig.colorbar(sm, ax=ax, label=f"sigma [{stress_unit}]")
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+    fig.colorbar(sm, cax=cax, label=f"sigma [{stress_unit}]")
 
     ax.set_xlabel(f"x [{lbl['length']}]")
     ax.set_ylabel(f"y [{lbl['length']}]")
