@@ -91,6 +91,9 @@ def compute_truss_buckling(
                                  is_buckled = (|N| >= P_cr).
         Tension members are retained in the tuple so the reporter can distinguish
         TENSION from SAFE compressive members by sign.
+        Elements whose material.I is <= 0 are skipped with a logger warning so
+        that buckling is opt-in: truss YAMLs without a meaningful I value still
+        solve, they just do not get a buckling entry.
     """
     result_by_id: dict[int, ElementResult] = {er.element_id: er for er in element_results}
     out: list[MemberBuckling] = []
@@ -99,6 +102,12 @@ def compute_truss_buckling(
             continue
         er = result_by_id.get(element.id)
         if er is None:
+            continue
+        if element.material.I <= 0.0:
+            logger.warning(
+                "Element %d: buckling skipped (material.I=%.3e is not > 0)",
+                element.id, element.material.I,
+            )
             continue
         P_cr = compute_member_P_cr(element)
         N = er.axial_force

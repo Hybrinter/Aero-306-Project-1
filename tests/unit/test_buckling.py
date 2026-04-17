@@ -226,3 +226,34 @@ class TestComputeTrussBuckling:
         model = _make_truss_model_two_elements()
         results = [_make_element_result(1, 0.0), _make_element_result(2, 0.0)]
         assert isinstance(compute_truss_buckling(model, results), tuple)
+
+    def test_zero_I_element_skipped_with_warning(self, caplog) -> None:
+        """A TRUSS element with material.I <= 0 is skipped and a warning is logged."""
+        import logging
+
+        from fea_solver.buckling import compute_truss_buckling
+        mat_good = MaterialProperties(E=200e9, A=1e-4, I=1e-8)
+        mat_bad = MaterialProperties(E=200e9, A=1e-4, I=0.0)
+        n1 = Node(1, (0.0, 0.0))
+        n2 = Node(2, (1.0, 0.0))
+        n3 = Node(3, (2.0, 0.0))
+        e_good = Element(id=1, node_i=n1, node_j=n2,
+                         element_type=ElementType.TRUSS, material=mat_good)
+        e_bad = Element(id=2, node_i=n2, node_j=n3,
+                        element_type=ElementType.TRUSS, material=mat_bad)
+        model = FEAModel(
+            mesh=Mesh(nodes=(n1, n2, n3), elements=(e_good, e_bad)),
+            boundary_conditions=(),
+            nodal_loads=(),
+            distributed_loads=(),
+            label="partial_I",
+        )
+        results = [_make_element_result(1, -1.0), _make_element_result(2, -1.0)]
+
+        with caplog.at_level(logging.WARNING, logger="fea_solver.buckling"):
+            bucklings = compute_truss_buckling(model, results)
+
+        assert len(bucklings) == 1
+        assert bucklings[0].element_id == 1
+        assert any("Element 2" in rec.message and "buckling skipped" in rec.message
+                   for rec in caplog.records)
