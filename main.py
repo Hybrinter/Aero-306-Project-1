@@ -32,7 +32,9 @@ from fea_solver.plotter import (
     plot_rotation,
     plot_shear_force_diagram,
     plot_transverse_displacement,
-    plot_truss_axial_forces,
+    plot_truss_deformed,
+    plot_truss_forces,
+    plot_truss_stress,
     show_all_plots,
 )
 from fea_solver.postprocessor import postprocess_all_elements
@@ -232,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
             label=model.label.split("/")[-1],   # "coarse" not "problem_1/coarse"
             element_results=tuple(element_results),
             model=model,
+            result=result,
         ))
 
     # --- Plots (all solutions overlaid on shared axes) ---
@@ -250,13 +253,29 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if all_truss:
-            # 2D truss: draw one structure plot per solution (overlay not meaningful)
+            # 2D truss: three gradient plots per solution (overlay not meaningful)
             for sol in all_series:
-                truss_path = (save_dir / f"{_sanitize_label(sol.label)}_truss.png") if save_dir else None
+                safe_sol = _sanitize_label(sol.label)
+
+                forces_path = (save_dir / f"{safe_sol}_truss_forces.png") if save_dir else None
                 figures.append(
-                    plot_truss_axial_forces(sol,
-                                            title=f"Truss Forces: {sol.label}",
-                                            output_path=truss_path)
+                    plot_truss_forces(sol,
+                                      title=f"Truss Forces: {sol.label}",
+                                      output_path=forces_path)
+                )
+
+                deformed_path = (save_dir / f"{safe_sol}_truss_deformed.png") if save_dir else None
+                figures.append(
+                    plot_truss_deformed(sol,
+                                        title=f"Truss Deformed: {sol.label}",
+                                        output_path=deformed_path)
+                )
+
+                stress_path = (save_dir / f"{safe_sol}_truss_stress.png") if save_dir else None
+                figures.append(
+                    plot_truss_stress(sol,
+                                      title=f"Truss Stress: {sol.label}",
+                                      output_path=stress_path)
                 )
         else:
             # 1D bar/beam/frame: overlay SFD, BMD, displacements, rotation plots
