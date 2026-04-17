@@ -18,7 +18,8 @@ Provides:
   - plot_axial_displacement:        u(x) with physical units on both axes
   - plot_rotation:                  theta(x) in radians
   - plot_truss_forces:              2D undeformed wireframe colored by axial force gradient
-  - plot_truss_deformed:            2D deformed wireframe with auto-scale, colored by axial force
+  - plot_truss_deformed:            2D deformed wireframe with auto-scale, colored by axial force;
+                                    optional buckling overlay draws a half-sine bow on failed members.
   - plot_truss_stress:              2D undeformed wireframe colored by axial stress (N/A) gradient
   - show_all_plots:                 plt.show() wrapper
 
@@ -41,7 +42,7 @@ from matplotlib.colors import Colormap, TwoSlopeNorm
 from matplotlib.cm import ScalarMappable
 import numpy as np
 
-from fea_solver.models import DOFType, ElementResult, FEAModel, SolutionSeries
+from fea_solver.models import DOFType, ElementResult, FEAModel, MemberBuckling, SolutionSeries
 from fea_solver.units import UNIT_LABELS
 
 logger = logging.getLogger(__name__)
@@ -594,6 +595,7 @@ def plot_truss_deformed(
     sol: SolutionSeries,
     title: str = "Truss Deformed Shape",
     output_path: Path | None = None,
+    buckling: tuple[MemberBuckling, ...] | None = None,
 ) -> plt.Figure:
     """Plot 2D truss geometry in its deformed state with coolwarm gradient by axial force.
 
@@ -601,12 +603,23 @@ def plot_truss_deformed(
     automatically so the largest displacement equals 10% of the bounding-box
     diagonal. The scale factor is appended to the plot title.
 
+    When buckling is provided, each entry whose is_buckled == True draws a
+    half-sine lateral bow on top of the deformed member line. The bow has
+    amplitude 0.1 * element.length (original undeformed length) along the unit
+    perpendicular to the deformed-member axis; it is drawn as a black dashed
+    line so it reads as a buckling-mode indicator rather than additional
+    geometry.
+
     Args:
         sol (SolutionSeries): Solution bundle. sol.result.displacements provides
             nodal translations; sol.element_results provides axial forces for color.
         title (str): Base plot title. Scale factor is appended automatically.
             Default "Truss Deformed Shape".
         output_path (Path | None): If provided, save figure to this path as PNG.
+        buckling (tuple[MemberBuckling, ...] | None): Optional per-element
+            buckling results. None (default) preserves the prior behaviour
+            exactly. When provided, members with is_buckled=True receive a
+            half-sine overlay.
 
     Returns:
         plt.Figure: The matplotlib Figure.
@@ -622,8 +635,11 @@ def plot_truss_deformed(
     result_by_id = {er.element_id: er for er in sol.element_results}
     nodes_by_id = {n.id: n for n in model.mesh.nodes}
     node_disps = _truss_node_displacements(sol)
+    buckled_ids: set[int] = (
+        {mb.element_id for mb in buckling if mb.is_buckled}
+        if buckling is not None else set()
+    )
 
-    # Auto-compute displacement scale factor
     xs = np.array([n.x for n in model.mesh.nodes])
     ys = np.array([n.y for n in model.mesh.nodes])
     bbox_diag = float(np.hypot(float(xs.max() - xs.min()), float(ys.max() - ys.min())))
@@ -656,6 +672,21 @@ def plot_truss_deformed(
         mid_y = (y_i_def + y_j_def) / 2.0
         ax.text(mid_x, mid_y, f"{N:.3g}", fontsize=7, ha="center", va="bottom",
                 color="black")
+
+        if element.id in buckled_ids:
+            dx = x_j_def - x_i_def
+            dy = y_j_def - y_i_def
+            chord = float(np.hypot(dx, dy))
+            if chord > 0.0:
+                cos_a = dx / chord
+                sin_a = dy / chord
+                amp = 0.1 * element.length
+                xi = np.linspace(0.0, 1.0, 30)
+                bow = amp * np.sin(np.pi * xi)
+                bx = x_i_def + xi * dx + bow * (-sin_a)
+                by = y_i_def + xi * dy + bow * ( cos_a)
+                ax.plot(bx, by, color="black", linestyle="--",
+                        linewidth=1.5, zorder=4)
 
     for node in model.mesh.nodes:
         U, V = node_disps[node.id]

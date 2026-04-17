@@ -594,3 +594,58 @@ class TestSolutionSeriesResult:
             result=result_stub,
         )
         assert sol.result is result_stub
+
+
+class TestTrussDeformedWithBuckling:
+    """plot_truss_deformed gains an optional buckling overlay."""
+
+    def test_default_kwarg_is_none_backward_compatible(self) -> None:
+        """Calling without buckling kwarg yields the same figure as before."""
+        from fea_solver.plotter import plot_truss_deformed
+        sol = _make_truss_series(axial_force=-100.0)
+        fig = plot_truss_deformed(sol)
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_overlay_draws_extra_line_per_buckled_member(self) -> None:
+        """One extra Line2D artist per buckled member appears on the axes."""
+        from fea_solver.models import MemberBuckling
+        from fea_solver.plotter import plot_truss_deformed
+        sol = _make_truss_series(axial_force=-1000.0)
+
+        fig0 = plot_truss_deformed(sol)
+        n0 = len(fig0.axes[0].get_lines())
+        plt.close(fig0)
+
+        mb = MemberBuckling(
+            element_id=1, P_cr=500.0, axial_force=-1000.0,
+            ratio=2.0, is_buckled=True,
+        )
+        fig1 = plot_truss_deformed(sol, buckling=(mb,))
+        n1 = len(fig1.axes[0].get_lines())
+        plt.close(fig1)
+
+        assert n1 == n0 + 1, (
+            f"Expected one extra Line2D for the buckled bow "
+            f"(baseline {n0}, with overlay {n1})."
+        )
+
+    def test_non_buckled_entry_adds_no_overlay(self) -> None:
+        """A MemberBuckling with is_buckled=False produces no extra lines."""
+        from fea_solver.models import MemberBuckling
+        from fea_solver.plotter import plot_truss_deformed
+        sol = _make_truss_series(axial_force=-10.0)
+
+        fig0 = plot_truss_deformed(sol)
+        n0 = len(fig0.axes[0].get_lines())
+        plt.close(fig0)
+
+        mb = MemberBuckling(
+            element_id=1, P_cr=500.0, axial_force=-10.0,
+            ratio=0.02, is_buckled=False,
+        )
+        fig1 = plot_truss_deformed(sol, buckling=(mb,))
+        n1 = len(fig1.axes[0].get_lines())
+        plt.close(fig1)
+
+        assert n1 == n0
