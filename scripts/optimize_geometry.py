@@ -18,6 +18,7 @@ import argparse
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -103,7 +104,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--cmaes-restarts", type=int, default=5)
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--polish-max-iter", type=int, default=200)
-    p.add_argument("--workers", default="auto")
+    p.add_argument("--workers", type=_resolve_workers, default="auto")
     p.add_argument("--run-id", required=True)
     p.add_argument("--output-dir", type=Path, default=Path("optimization_runs"))
     p.add_argument(
@@ -145,11 +146,16 @@ def _apply_smoke(args: argparse.Namespace) -> None:
     args.polish_max_iter = 30
 
 
-def _resolve_workers(arg: str) -> int:
+def _resolve_workers(arg: str | int) -> int:
     """Resolve the --workers argument to a concrete integer worker count.
 
+    Used both as an argparse type= callable (receives a str from the CLI) and
+    called directly in main() to resolve the default 'auto' string.
+
     Args:
-        arg (str): Either 'auto' or a string representation of an integer.
+        arg (str | int): Either 'auto', a string representation of an integer,
+            or an already-resolved integer (when called from main() after
+            argparse has already invoked this function).
 
     Returns:
         int: Number of parallel workers. 'auto' resolves to os.cpu_count()
@@ -158,10 +164,17 @@ def _resolve_workers(arg: str) -> int:
     Notes:
         On single-core machines or when os.cpu_count() is None, returns 1
         to avoid spawning zero workers.
+        Values less than 1 are rejected with an argparse.ArgumentTypeError
+        so the error surfaces at the CLI boundary before any executor is created.
+        When used as type= in argparse, ArgumentTypeError causes argparse to
+        print a formatted error message and exit with status 2.
     """
     if arg == "auto":
         return max(1, os.cpu_count() or 1)
-    return int(arg)
+    n = int(arg)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"--workers must be >= 1, got {n}")
+    return n
 
 
 def _baseline_tip_disp(problem: GeometryOptimizationProblem) -> float:
@@ -345,7 +358,11 @@ def main() -> None:
         run_dir=run_dir,
     )
 
-    er = run_ensemble(problem, config)
+    try:
+        er = run_ensemble(problem, config)
+    except ValueError as exc:
+        logger.error("Ensemble produced no candidates: %s", exc)
+        sys.exit(1)
 
     _emit_best_design_yaml(base, problem, er.winner_x, run_dir / "best_design.yaml")
     write_report(
