@@ -682,6 +682,79 @@ def plot_truss_deformed(
     return fig
 
 
+def plot_truss_stress(
+    sol: SolutionSeries,
+    title: str = "Truss Member Stresses",
+    output_path: Path | None = None,
+) -> plt.Figure:
+    """Plot 2D truss geometry (undeformed) with coolwarm gradient coloring by axial stress.
+
+    Axial stress per member: sigma = N / A, where N is the axial force from
+    ElementResult and A is the element's cross-sectional area. Members are
+    colored on a continuous diverging scale (blue = compression, red = tension)
+    with a colorbar showing the stress magnitude. Each member is annotated at
+    its midpoint with the numeric stress value.
+
+    Args:
+        sol (SolutionSeries): Solution bundle containing element results and model.
+        title (str): Plot title. Default "Truss Member Stresses".
+        output_path (Path | None): If provided, save figure to this path as PNG.
+
+    Returns:
+        plt.Figure: The matplotlib Figure.
+
+    Notes:
+        Stress unit label is composed as f"{force_unit}/{length_unit}^2"
+        (e.g. "N/m^2" for SI, "lb/in^2" for empirical). No changes to units.py needed.
+        Node coordinates are the original (undeformed) positions.
+        If output_path is provided, saves figure at 150 dpi.
+    """
+    model = sol.model
+    lbl = _unit_labels(model)
+    result_by_id = {er.element_id: er for er in sol.element_results}
+    nodes_by_id = {n.id: n for n in model.mesh.nodes}
+
+    stresses = [
+        (result_by_id[e.id].axial_force if e.id in result_by_id else 0.0) / e.material.A
+        for e in model.mesh.elements
+    ]
+    cmap, norm = _truss_colormap_norm(stresses)
+    stress_unit = f"{lbl['force']}/{lbl['length']}^2"
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    for element, sigma in zip(model.mesh.elements, stresses):
+        n_i = nodes_by_id[element.node_i.id]
+        n_j = nodes_by_id[element.node_j.id]
+        color = cmap(norm(sigma))
+        ax.plot([n_i.x, n_j.x], [n_i.y, n_j.y], color=color, linewidth=2.5)
+        mid_x = (n_i.x + n_j.x) / 2.0
+        mid_y = (n_i.y + n_j.y) / 2.0
+        ax.text(mid_x, mid_y, f"{sigma:.3g}", fontsize=7, ha="center", va="bottom",
+                color="black")
+
+    for node in model.mesh.nodes:
+        ax.plot(node.x, node.y, "ko", markersize=4, zorder=5)
+        ax.text(node.x, node.y, f" {node.id}", fontsize=8, va="bottom")
+
+    sm = ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.colorbar(sm, ax=ax, label=f"sigma [{stress_unit}]")
+
+    ax.set_xlabel(f"x [{lbl['length']}]")
+    ax.set_ylabel(f"y [{lbl['length']}]")
+    ax.set_title(title)
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        logger.info("Truss stress plot saved to %s", output_path)
+
+    return fig
+
+
 def show_all_plots(figures: list[plt.Figure]) -> None:
     """Display all figures. Call plt.show() once after all figures are ready.
 

@@ -269,6 +269,49 @@ class TestPlotTrussDeformed:
         plt.close(fig)
 
 
+class TestPlotTrussStress:
+    """Tests for plot_truss_stress."""
+
+    def test_returns_figure(self) -> None:
+        """plot_truss_stress returns a matplotlib Figure."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series())
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """plot_truss_stress saves PNG when output_path given."""
+        from fea_solver.plotter import plot_truss_stress
+        out = tmp_path / "stress.png"
+        fig = plot_truss_stress(_make_truss_series(), output_path=out)
+        assert out.exists()
+        plt.close(fig)
+
+    def test_has_colorbar(self) -> None:
+        """plot_truss_stress figure contains a colorbar axes."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series())
+        assert len(fig.axes) >= 2
+        plt.close(fig)
+
+    def test_colorbar_label_contains_stress_unit(self) -> None:
+        """Colorbar label contains force and length units for SI model."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series())
+        colorbar_ax = fig.axes[1]
+        ylabel = colorbar_ax.get_ylabel()
+        assert "N" in ylabel
+        assert "m" in ylabel
+        plt.close(fig)
+
+    def test_title_set(self) -> None:
+        """Custom title is applied."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series(), title="My Stress")
+        assert fig.axes[0].get_title() == "My Stress"
+        plt.close(fig)
+
+
 class TestPlotShearForceDiagram:
     """Tests for plot_shear_force_diagram."""
 
