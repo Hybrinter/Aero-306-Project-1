@@ -70,5 +70,5 @@ boundary_conditions:
 
 loads:
   nodal:
-    - {node_id: 8, type: point_force_y, magnitude: -50.0}   # F = 50 N downward
+    - {node_id: 9, type: point_force_y, magnitude: -50.0}   # F = 50 N downward
   distributed: []

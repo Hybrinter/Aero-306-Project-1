@@ -31,9 +31,9 @@ _CONFIG = Path(__file__).parent.parent.parent / "config"
 @pytest.fixture(scope="module")
 def inclined_roller_solution():
     """Solve the inclined roller test case once for the module."""
-    yaml_path = _CONFIG / "test_inclined_roller_45deg.yaml"
+    yaml_path = _CONFIG / "example_case_09_inclined_roller.yaml"
     if not yaml_path.exists():
-        pytest.skip("test_inclined_roller_45deg.yaml not found")
+        pytest.skip("example_case_09_inclined_roller.yaml not found")
     model = load_model_from_yaml(yaml_path)
     dof_map = build_dof_map(model)
     K = assemble_global_stiffness(model, dof_map)
