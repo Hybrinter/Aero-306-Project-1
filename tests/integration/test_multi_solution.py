@@ -94,6 +94,7 @@ class TestMultiSolutionPipeline:
                 label=model.label.split("/")[-1],
                 element_results=tuple(element_results),
                 model=model,
+                result=result,
             ))
         fig = plot_shear_force_diagram(all_series)
         assert isinstance(fig, plt.Figure)
@@ -121,6 +122,7 @@ class TestMultiSolutionPipeline:
                 label=model.label.split("/")[-1],
                 element_results=tuple(element_results),
                 model=model,
+                result=result,
             ))
         out = tmp_path / "shear.png"
         fig = plot_shear_force_diagram(all_series, output_path=out)

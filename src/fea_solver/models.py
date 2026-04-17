@@ -479,15 +479,20 @@ class SolutionSeries:
             element results for all elements in this solution's mesh.
         model (FEAModel): The FEA model that produced these results; used to retrieve
             unit labels for axis annotations.
+        result (SolutionResult): Full solution result carrying the displacement vector
+            and DOF map. Required by truss deformed-shape plots to recover nodal (U, V).
 
     Notes:
         Frozen and slotted, matching the style of all other result containers.
         element_results is a tuple (not list) to satisfy the frozen invariant.
         At call sites, wrap a list with tuple(): tuple(element_results_list).
         The model is carried here (not recovered from ElementResult) because
-        ElementResult does not hold a model reference.
+        ElementResult does not hold a model reference. result carries the full
+        displacement vector needed by truss deformed-shape plots to recover
+        nodal (U, V) translations.
     """
 
     label: str
     element_results: tuple[ElementResult, ...]
     model: FEAModel
+    result: SolutionResult

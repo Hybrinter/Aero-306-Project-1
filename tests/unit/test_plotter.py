@@ -7,9 +7,11 @@ import matplotlib
 matplotlib.use("Agg")  # non-interactive backend for tests
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
+from fea_solver.assembler import build_dof_map
 from fea_solver.models import (
-    Element, ElementResult, ElementType,
-    FEAModel, LinearConstraint, MaterialProperties, Mesh, Node, SolutionSeries, UnitSystem,
+    DOFMap, DOFType, Element, ElementResult, ElementType,
+    FEAModel, LinearConstraint, MaterialProperties, Mesh, Node,
+    SolutionResult, SolutionSeries, UnitSystem,
 )
 from fea_solver.plotter import (
     plot_axial_displacement,
@@ -70,8 +72,15 @@ def _make_series(
 ) -> SolutionSeries:
     """Build a SolutionSeries with a single ElementResult for plotter tests."""
     model = _make_model(unit_system)
+    dof_map = build_dof_map(model)
+    result_stub = SolutionResult(
+        displacements=np.zeros(dof_map.total_dofs),
+        reactions=np.zeros(0),
+        dof_map=dof_map,
+        model=model,
+    )
     er = make_element_result(x_start=x_start, x_end=x_end)
-    return SolutionSeries(label=label, element_results=(er,), model=model)
+    return SolutionSeries(label=label, element_results=(er,), model=model, result=result_stub)
 
 
 class TestPlotShearForceDiagram:
@@ -86,8 +95,13 @@ class TestPlotShearForceDiagram:
     def test_handles_multiple_elements(self) -> None:
         """SFD plot handles multiple elements in a series."""
         model = _make_model()
+        dof_map = build_dof_map(model)
+        result_stub = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs), reactions=np.zeros(0),
+            dof_map=dof_map, model=model,
+        )
         ers = tuple(make_element_result(i + 1, float(i), float(i + 1)) for i in range(3))
-        series = SolutionSeries(label="multi", element_results=ers, model=model)
+        series = SolutionSeries(label="multi", element_results=ers, model=model, result=result_stub)
         fig = plot_shear_force_diagram([series], title="Multi-element SFD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
@@ -126,8 +140,13 @@ class TestPlotBendingMomentDiagram:
     def test_handles_multiple_elements(self) -> None:
         """BMD plot handles multiple elements."""
         model = _make_model()
+        dof_map = build_dof_map(model)
+        result_stub = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs), reactions=np.zeros(0),
+            dof_map=dof_map, model=model,
+        )
         ers = tuple(make_element_result(i + 1, float(i), float(i + 1)) for i in range(3))
-        series = SolutionSeries(label="multi", element_results=ers, model=model)
+        series = SolutionSeries(label="multi", element_results=ers, model=model, result=result_stub)
         fig = plot_bending_moment_diagram([series], title="Multi-element BMD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
@@ -323,3 +342,26 @@ class TestMultiSeriesPlots:
         first_line = next(ln for ln in ax.get_lines() if ln.get_label().startswith("V(x)"))
         assert first_line.get_linestyle() == "-"
         plt.close(fig)
+
+
+class TestSolutionSeriesResult:
+    """Tests that SolutionSeries carries a SolutionResult."""
+
+    def test_solution_series_has_result_field(self) -> None:
+        """SolutionSeries constructed with result field is accessible via .result."""
+        model = _make_model()
+        dof_map = build_dof_map(model)
+        result_stub = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs),
+            reactions=np.zeros(0),
+            dof_map=dof_map,
+            model=model,
+        )
+        er = make_element_result()
+        sol = SolutionSeries(
+            label="test",
+            element_results=(er,),
+            model=model,
+            result=result_stub,
+        )
+        assert sol.result is result_stub
