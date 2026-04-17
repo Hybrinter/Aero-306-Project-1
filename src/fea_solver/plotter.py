@@ -182,7 +182,7 @@ def _truss_colormap_norm(values: list[float]) -> tuple[Colormap, TwoSlopeNorm]:
     max_abs = max((abs(v) for v in values), default=0.0)
     if max_abs == 0.0:
         max_abs = 1.0
-    cmap: Colormap = plt.cm.get_cmap("coolwarm")
+    cmap: Colormap = plt.get_cmap("coolwarm")
     norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0.0, vmax=max_abs)
     return cmap, norm
 

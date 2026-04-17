@@ -1,0 +1,44 @@
+2026-04-17 12:45:51 [INFO    ] fea_solver: Logging initialized for case: case_02_cantilever_beam
+2026-04-17 12:45:51 [INFO    ] fea_solver: === FEA Solver started: case_02_cantilever_beam ===
+2026-04-17 12:45:51 [INFO    ] fea_solver: Config: config\example_case_02_cantilever_beam.yaml
+2026-04-17 12:45:51 [INFO    ] fea_solver: Solutions: 1
+2026-04-17 12:45:51 [INFO    ] fea_solver: --- Solving: case_02_cantilever_beam ---
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.assembler: Built DOF map: 6 total DOFs
+2026-04-17 12:45:51 [INFO    ] fea_solver: Assembling global stiffness matrix (6x6)...
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.assembler: Assembled global K: shape (6, 6)
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.assembler: Nodal load -1 applied at node 3 DOF v (global 4)
+2026-04-17 12:45:51 [INFO    ] fea_solver: Solving displacement system...
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.constraints: Penalty constraints applied: 2 constraints, k_penalty=1.920e+10
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.solver: K_mod condition number: 3.145e+10
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.solver: Max displacement: 5.000000e-01
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.constraints: Constraint residuals: [-1. -1.]
+2026-04-17 12:45:51 [INFO    ] fea_solver.solver: Solve complete: max|u|=5.0000e-01, max|R|=1.0000e+00
+2026-04-17 12:45:51 [INFO    ] fea_solver: Post-processing element internal forces...
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.postprocessor: Element 1: V_range=[1.0000e+00, 1.0000e+00], M_range=[-1.0000e+00, -5.0000e-01], v_range=[-1.0417e-01, -5.2083e-11]
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.postprocessor: Post-processed element 1
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.postprocessor: Element 2: V_range=[1.0000e+00, 1.0000e+00], M_range=[-5.0000e-01, -8.8818e-16], v_range=[-3.3333e-01, -1.0417e-01]
+2026-04-17 12:45:51 [DEBUG   ] fea_solver.postprocessor: Post-processed element 2
+2026-04-17 12:45:51 [INFO    ] fea_solver.reporter: Report generated:
+============================================================
+FEA SOLVER REPORT -- case_02_cantilever_beam
+Unit system: SI
+============================================================
+Nodes: 3
+Elements: 2
+Total DOFs: 6
+
+--- Nodal Displacements ---
+  Node 1 (x=0.000 m): v=-5.208333e-11 m theta=-5.208333e-11 rad
+  Node 2 (x=0.500 m): v=-1.041667e-01 m theta=-3.750000e-01 rad
+  Node 3 (x=1.000 m): v=-3.333333e-01 m theta=-5.000000e-01 rad
+
+--- Element Forces ---
+  Elem 1: N=0.0000e+00 N, |V|_max=1.0000e+00 N, |M|_max=1.0000e+00 N-m
+  Elem 2: N=0.0000e+00 N, |V|_max=1.0000e+00 N, |M|_max=5.0000e-01 N-m
+2026-04-17 12:45:52 [INFO    ] fea_solver.plotter: Shear plot saved to outputs\beam_regression\case_02_cantilever_beam_shear.png
+2026-04-17 12:45:52 [INFO    ] fea_solver.plotter: Moments plot saved to outputs\beam_regression\case_02_cantilever_beam_moment.png
+2026-04-17 12:45:52 [INFO    ] fea_solver.plotter: Vertical displacement plot saved to outputs\beam_regression\case_02_cantilever_beam_vertical_disp.png
+2026-04-17 12:45:52 [INFO    ] fea_solver.plotter: Axial displacement plot saved to outputs\beam_regression\case_02_cantilever_beam_axial_disp.png
+2026-04-17 12:45:52 [INFO    ] fea_solver.plotter: Rotation plot saved to outputs\beam_regression\case_02_cantilever_beam_rotation.png
+2026-04-17 12:45:52 [INFO    ] fea_solver: Plots saved to outputs\beam_regression
+2026-04-17 12:45:52 [INFO    ] fea_solver: === FEA Solver complete ===
