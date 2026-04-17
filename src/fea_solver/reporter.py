@@ -5,6 +5,7 @@ Provides functions for displaying:
   - Nodal displacements after solving
   - Reaction forces
   - Element force summaries
+  - Buckling summary (truss Euler buckling status)
 
 _lbl: Returns unit-label dict for a model's unit system.
 """
@@ -22,6 +23,7 @@ from fea_solver.models import (
     ElementResult,
     ElementType,
     FEAModel,
+    MemberBuckling,
     SolutionResult,
 )
 from fea_solver.units import UNIT_LABELS
@@ -284,3 +286,59 @@ def generate_report(
     logger.info("Report generated:\n%s", report)
     _console.print(report)
     return report
+
+
+def print_buckling_summary(
+    bucklings: tuple[MemberBuckling, ...],
+    model: FEAModel,
+) -> None:
+    """Print a rich table summarizing Euler buckling status per TRUSS member.
+
+    Columns:
+        Element      -- element id
+        N            -- signed axial force [force unit]
+        P_cr         -- Euler critical load [force unit]
+        |N|/P_cr     -- ratio formatted as %.2f (0.00 for tension)
+        Status       -- BUCKLED (bold red) / SAFE (green) / TENSION (dim)
+
+    Args:
+        bucklings (tuple[MemberBuckling, ...]): Output of compute_truss_buckling.
+            Empty tuple produces no output at all.
+        model (FEAModel): Used for the force-unit label in column headers.
+
+    Returns:
+        None
+
+    Notes:
+        Uses the module-level rich Console (_console). Tension members are
+        included in the table so the user can see every member on one sheet.
+    """
+    if not bucklings:
+        return
+
+    force_unit = _lbl(model)["force"]
+
+    table = Table(title="Buckling Summary", show_header=True, header_style="bold")
+    table.add_column("Element", justify="right")
+    table.add_column(f"N [{force_unit}]", justify="right")
+    table.add_column(f"P_cr [{force_unit}]", justify="right")
+    table.add_column("|N|/P_cr", justify="right")
+    table.add_column("Status", justify="center")
+
+    for mb in bucklings:
+        if mb.is_buckled:
+            status = "[bold red]BUCKLED[/bold red]"
+        elif mb.axial_force < 0.0:
+            status = "[green]SAFE[/green]"
+        else:
+            status = "[dim]TENSION[/dim]"
+        table.add_row(
+            str(mb.element_id),
+            f"{mb.axial_force:.3e}",
+            f"{mb.P_cr:.3e}",
+            f"{mb.ratio:.2f}",
+            status,
+        )
+
+    _console.print(table)
+    logger.info("Buckling summary printed for %d members", len(bucklings))
