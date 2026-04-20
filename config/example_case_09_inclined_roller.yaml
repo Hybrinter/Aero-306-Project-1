@@ -1,0 +1,33 @@
+# Inclined roller test: triangle truss, 45-degree roller at node 2
+# Node 1 (0,0): pin  Node 2 (2,0): 45-deg roller  Node 3 (1,1): applied load
+# EA = 1 for all members (E=1, A=1)
+label: "inclined_roller_45deg"
+unit_system: SI
+
+mesh:
+  nodes:
+    - {id: 1, x: 0.0, y: 0.0}
+    - {id: 2, x: 2.0, y: 0.0}
+    - {id: 3, x: 1.0, y: 1.0}
+  elements:
+    - {id: 1, node_i: 1, node_j: 3, type: truss, material: unit}
+    - {id: 2, node_i: 3, node_j: 2, type: truss, material: unit}
+    - {id: 3, node_i: 1, node_j: 2, type: truss, material: unit}
+
+materials:
+  unit:
+    E: 1.0
+    A: 1.0
+    I: 0.0
+
+boundary_conditions:
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}   # pin: fix U at node 1
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}   # pin: fix V at node 1
+  # 45-degree inclined roller at node 2: constrain direction (1/sqrt(2), 1/sqrt(2))
+  # Normalized: [0.7071067812, 0.7071067812, 0.0]
+  - {node_id: 2, coefficients: [0.7071067812, 0.7071067812, 0.0]}
+
+loads:
+  nodal:
+    - {node_id: 3, type: point_force_y, magnitude: -1.0}
+  distributed: []

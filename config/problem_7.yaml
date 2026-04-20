@@ -16,12 +16,6 @@
 #   4-7, 7-5, 5-8, 8-6
 # Verticals (if any): 1-4, 3-6 (end panels)
 # Right extension to node 9 (25,-5):
-#   3-9, 6-9 (TODO: verify exact right boundary elements)
-#
-# TODO: Verify element connectivity from problem image.
-#       The exact connectivity pattern needs confirmation.
-# TODO: Verify load location (node 8 or 9 per image).
-# TODO: Verify boundary conditions (pin at node 1, roller at node 4 per image).
 label: "problem_7"
 unit_system: empirical   # all values in N and mm (E in N/mm^2 = MPa)
 
@@ -46,33 +40,35 @@ mesh:
     # Lower chord
     - {id:  3, node_i: 4, node_j: 5, type: truss, material: steel}
     - {id:  4, node_i: 5, node_j: 6, type: truss, material: steel}
-    # Left end verticals
-    - {id:  5, node_i: 1, node_j: 4, type: truss, material: steel}
+    # Verticals
+    - {id:  5, node_i: 2, node_j: 5, type: truss, material: steel}
+    - {id:  6, node_i: 3, node_j: 6, type: truss, material: steel}
     # Warren diagonals to node 7 (5,-5)
-    - {id:  6, node_i: 1, node_j: 7, type: truss, material: steel}
-    - {id:  7, node_i: 4, node_j: 7, type: truss, material: steel}
-    - {id:  8, node_i: 7, node_j: 2, type: truss, material: steel}
-    - {id:  9, node_i: 7, node_j: 5, type: truss, material: steel}
+    - {id:  7, node_i: 1, node_j: 7, type: truss, material: steel}
+    - {id:  8, node_i: 4, node_j: 7, type: truss, material: steel}
+    - {id:  9, node_i: 7, node_j: 2, type: truss, material: steel}
+    - {id: 10, node_i: 7, node_j: 5, type: truss, material: steel}
     # Warren diagonals to node 8 (15,-5)
-    - {id: 10, node_i: 2, node_j: 8, type: truss, material: steel}
-    - {id: 11, node_i: 5, node_j: 8, type: truss, material: steel}
-    - {id: 12, node_i: 8, node_j: 3, type: truss, material: steel}
-    - {id: 13, node_i: 8, node_j: 6, type: truss, material: steel}
+    - {id: 11, node_i: 2, node_j: 8, type: truss, material: steel}
+    - {id: 12, node_i: 5, node_j: 8, type: truss, material: steel}
+    - {id: 13, node_i: 8, node_j: 3, type: truss, material: steel}
+    - {id: 14, node_i: 8, node_j: 6, type: truss, material: steel}
     # Right extension to node 9 (25,-5)
-    - {id: 14, node_i: 3, node_j: 9, type: truss, material: steel}
-    - {id: 15, node_i: 6, node_j: 9, type: truss, material: steel}
+    - {id: 15, node_i: 3, node_j: 9, type: truss, material: steel}
+    - {id: 16, node_i: 6, node_j: 9, type: truss, material: steel}
 
 materials:
   steel:
     E: 3003.0    # N/mm^2 = MPa (given: E = 3003 MPa)
     A: 1.0       # mm^2
-    I: 0.0       # mm^4 (not used for truss; problem gives I=1/12 mm^4 but it's irrelevant)
+    I: 0.083333  # mm^4
 
 boundary_conditions:
-  - {node_id: 1, type: pin}       # pin: fixed U and V  (TODO: verify)
-  - {node_id: 4, type: roller}    # roller: fixed V      (TODO: verify)
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 4, coefficients: [1.0, 0.0, 0.0]}   # roller: fixed U
 
 loads:
   nodal:
-    - {node_id: 8, type: point_force_y, magnitude: -50.0}   # F = 50 N downward (TODO: verify node)
+    - {node_id: 9, type: point_force_y, magnitude: -50.0}   # F = 50 N downward
   distributed: []

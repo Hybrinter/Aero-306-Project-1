@@ -5,12 +5,14 @@ Provides functions for displaying:
   - Nodal displacements after solving
   - Reaction forces
   - Element force summaries
+  - Buckling summary (truss Euler buckling status)
 
 _lbl: Returns unit-label dict for a model's unit system.
 """
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 import numpy as np
 from rich.console import Console
@@ -22,6 +24,7 @@ from fea_solver.models import (
     ElementResult,
     ElementType,
     FEAModel,
+    MemberBuckling,
     SolutionResult,
 )
 from fea_solver.units import UNIT_LABELS
@@ -159,34 +162,27 @@ def print_reaction_forces(result: SolutionResult) -> None:
 
     Notes:
         Output is printed to console via rich.console.Console.
-        Identifies constrained DOFs and looks up corresponding reactions.
+        Each row corresponds to one LinearConstraint in model.boundary_conditions.
+        Reaction[i] = k_penalty * (a_i^T * u_node_i - rhs_i).
         Force/moment units match the model's canonical unit system.
     """
     model = result.model
-    dof_map = result.dof_map
-
-    # Reconstruct which DOFs are constrained (same logic as constraints.py)
-    from fea_solver.constraints import get_constrained_dof_indices
-    constrained = get_constrained_dof_indices(model, dof_map)
 
     lbl = _lbl(model)
     table = Table(title=f"Reaction Forces -- {model.label}", show_header=True,
                   header_style="bold red")
     table.add_column("Node ID", justify="right")
-    table.add_column("DOF Type", justify="center")
-    table.add_column("Global Index", justify="right")
+    table.add_column("Direction [U, V, Th]", justify="center")
+    table.add_column("Prescribed", justify="right")
     table.add_column(f"Reaction [{lbl['force']} or {lbl['moment']}]", justify="right")
 
-    reverse_mapping = {idx: key for key, idx in dof_map.mapping.items()}
-    for i, global_idx in enumerate(constrained):
-        result_tuple = reverse_mapping.get(global_idx)
-        if result_tuple is None:
-            raise KeyError(f"No DOF found for global index {global_idx}")
-        node_id, dof_type = result_tuple
+    for i, constraint in enumerate(model.boundary_conditions):
+        c = constraint.coefficients
+        coeff_str = f"[{c[0]:.3f}, {c[1]:.3f}, {c[2]:.3f}]"
         table.add_row(
-            str(node_id),
-            dof_type.value,
-            str(global_idx),
+            str(constraint.node_id),
+            coeff_str,
+            f"{constraint.rhs:.4e}",
             f"{result.reactions[i]:.6e}",
         )
 
@@ -291,3 +287,60 @@ def generate_report(
     logger.info("Report generated:\n%s", report)
     _console.print(report)
     return report
+
+
+def print_buckling_summary(
+    bucklings: Sequence[MemberBuckling],
+    model: FEAModel,
+) -> None:
+    """Print a rich table summarizing Euler buckling status per TRUSS member.
+
+    Columns:
+        Element      -- element id
+        N            -- signed axial force [force unit]
+        P_cr         -- Euler critical load [force unit]
+        |N|/P_cr     -- ratio formatted as %.2f (0.00 for tension)
+        Status       -- BUCKLED (bold red) / SAFE (green) / TENSION (dim)
+
+    Args:
+        bucklings (Sequence[MemberBuckling]): Output of compute_truss_buckling
+            (a tuple) or any other sequence of MemberBuckling. Empty sequence
+            produces no output at all.
+        model (FEAModel): Used for the force-unit label in column headers.
+
+    Returns:
+        None
+
+    Notes:
+        Uses the module-level rich Console (_console). Tension members are
+        included in the table so the user can see every member on one sheet.
+    """
+    if not bucklings:
+        return
+
+    force_unit = _lbl(model)["force"]
+
+    table = Table(title="Buckling Summary", show_header=True, header_style="bold")
+    table.add_column("Element", justify="right")
+    table.add_column(f"N [{force_unit}]", justify="right")
+    table.add_column(f"P_cr [{force_unit}]", justify="right")
+    table.add_column("|N|/P_cr", justify="right")
+    table.add_column("Status", justify="center")
+
+    for mb in bucklings:
+        if mb.is_buckled:
+            status = "[bold red]BUCKLED[/bold red]"
+        elif mb.axial_force >= 0.0:
+            status = "[dim]TENSION[/dim]"
+        else:
+            status = "[green]SAFE[/green]"
+        table.add_row(
+            str(mb.element_id),
+            f"{mb.axial_force:.3e}",
+            f"{mb.P_cr:.3e}",
+            f"{mb.ratio:.2f}",
+            status,
+        )
+
+    _console.print(table)
+    logger.info("Buckling summary printed for %d members", len(bucklings))

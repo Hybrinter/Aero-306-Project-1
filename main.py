@@ -22,22 +22,25 @@ from fea_solver.assembler import (
     assemble_global_stiffness,
     build_dof_map,
 )
+from fea_solver.buckling import compute_truss_buckling
 from fea_solver.io_yaml import load_models_from_yaml
 from fea_solver.logging_config import configure_logging
-from fea_solver.models import SolutionSeries
-from fea_solver.models import ElementType
+from fea_solver.models import ElementType, SolutionSeries
 from fea_solver.plotter import (
     plot_axial_displacement,
     plot_bending_moment_diagram,
     plot_rotation,
     plot_shear_force_diagram,
     plot_transverse_displacement,
-    plot_truss_axial_forces,
+    plot_truss_deformed,
+    plot_truss_forces,
+    plot_truss_stress,
     show_all_plots,
 )
 from fea_solver.postprocessor import postprocess_all_elements
 from fea_solver.reporter import (
     generate_report,
+    print_buckling_summary,
     print_dof_table,
     print_element_forces,
     print_nodal_results,
@@ -232,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
             label=model.label.split("/")[-1],   # "coarse" not "problem_1/coarse"
             element_results=tuple(element_results),
             model=model,
+            result=result,
         ))
 
     # --- Plots (all solutions overlaid on shared axes) ---
@@ -250,13 +254,33 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if all_truss:
-            # 2D truss: draw one structure plot per solution (overlay not meaningful)
+            # 2D truss: three gradient plots per solution + buckling overlay/summary.
             for sol in all_series:
-                truss_path = (save_dir / f"{_sanitize_label(sol.label)}_truss.png") if save_dir else None
+                safe_sol = _sanitize_label(sol.label)
+
+                bucklings = compute_truss_buckling(sol.model, sol.element_results)
+                print_buckling_summary(bucklings, sol.model)
+
+                forces_path = (save_dir / f"{safe_sol}_truss_forces.png") if save_dir else None
                 figures.append(
-                    plot_truss_axial_forces(sol,
-                                            title=f"Truss Forces: {sol.label}",
-                                            output_path=truss_path)
+                    plot_truss_forces(sol,
+                                      title=f"Truss Forces: {sol.label}",
+                                      output_path=forces_path)
+                )
+
+                deformed_path = (save_dir / f"{safe_sol}_truss_deformed.png") if save_dir else None
+                figures.append(
+                    plot_truss_deformed(sol,
+                                        title=f"Truss Deformed: {sol.label}",
+                                        output_path=deformed_path,
+                                        buckling=bucklings)
+                )
+
+                stress_path = (save_dir / f"{safe_sol}_truss_stress.png") if save_dir else None
+                figures.append(
+                    plot_truss_stress(sol,
+                                      title=f"Truss Stress: {sol.label}",
+                                      output_path=stress_path)
                 )
         else:
             # 1D bar/beam/frame: overlay SFD, BMD, displacements, rotation plots

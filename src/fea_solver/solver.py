@@ -1,7 +1,11 @@
-"""Displacement solver and reaction force computation.
+"""Displacement solver using the penalty-modified full stiffness system.
 
-Solves the partitioned linear system K_ff * u_f = F_f using numpy.linalg.solve.
-Computes reaction forces at constrained DOFs via R = K[c,:] @ u - F[c].
+Solves K_mod * u = F_mod where K_mod and F_mod include penalty constraint
+terms. Reactions are computed as penalty residuals per constraint.
+
+compute_penalty_parameter: compute k_penalty from penalty_alpha and K diagonal.
+solve_system:              np.linalg.solve with condition number check.
+run_solve_pipeline:        orchestrate full solve (penalty apply -> solve -> reactions).
 """
 from __future__ import annotations
 
@@ -10,89 +14,86 @@ import logging
 import numpy as np
 from numpy.typing import NDArray
 
-from fea_solver.constraints import (
-    apply_constraints_reduction,
-    get_constrained_dof_indices,
-    get_free_dof_indices,
-)
+from fea_solver.constraints import apply_penalty_constraints, compute_constraint_residuals
 from fea_solver.models import DOFMap, FEAModel, SolutionResult
 
 logger = logging.getLogger(__name__)
 
 
-def solve_displacements(
-    K_ff: NDArray[np.float64],
-    F_f: NDArray[np.float64],
-    free_dofs: list[int],
-    constrained_dofs: list[int],
-    n_total_dofs: int,
-) -> NDArray[np.float64]:
-    """Solve K_ff * u_f = F_f and return the full displacement vector.
+def compute_penalty_parameter(K: NDArray[np.float64], penalty_alpha: float) -> float:
+    """Compute the penalty stiffness parameter from the natural stiffness matrix.
+
+    k_penalty = penalty_alpha * max(abs(diag(K)))
 
     Args:
-        K_ff: Reduced (free-free) stiffness matrix.
-        F_f: Reduced force vector for free DOFs.
-        free_dofs: Global indices of free DOFs.
-        constrained_dofs: Global indices of constrained DOFs (u_c = 0).
-        n_total_dofs: Total number of DOFs in the full system.
+        K (NDArray[np.float64]): Natural (pre-penalty) global stiffness matrix.
+        penalty_alpha (float): Scale factor from FEAModel.penalty_alpha.
 
     Returns:
-        Full displacement vector u of shape (n_total_dofs,),
-        with u[constrained] = 0.
-
-    Raises:
-        np.linalg.LinAlgError: If K_ff is singular (structure is unstable).
+        float: Penalty stiffness parameter.
 
     Notes:
-        Condition number threshold of 1e14 is used to detect ill-conditioning.
-        Values above 1e14 indicate nearly singular stiffness matrix;
-        typically due to missing or improperly applied boundary conditions.
+        Scaling by max(diag(K)) makes the penalty parameter dimensionally
+        consistent across problem scales, so penalty_alpha=1e8 works for both
+        steel aerospace structures and soft-material unit-stiffness problems.
     """
-    cond = float(np.linalg.cond(K_ff))
-    logger.debug("K_ff condition number: %.3e", cond)
-    if cond > 1e14:
-        logger.warning("K_ff is nearly singular (cond=%.3e) -- check BCs", cond)
+    return penalty_alpha * float(np.max(np.abs(np.diag(K))))
+
+
+def solve_system(
+    K_mod: NDArray[np.float64],
+    F_mod: NDArray[np.float64],
+    *,
+    penalty_alpha: float | None = None,
+) -> NDArray[np.float64]:
+    """Solve the penalty-modified system K_mod * u = F_mod.
+
+    Args:
+        K_mod (NDArray[np.float64]): Penalty-modified stiffness matrix, shape (n, n).
+        F_mod (NDArray[np.float64]): Penalty-modified force vector, shape (n,).
+        penalty_alpha (float | None): Penalty-scaling factor used to build K_mod,
+            forwarded from FEAModel.penalty_alpha. When supplied, the near-
+            singularity warning is penalty-aware and fires only when
+            cond(K_mod) > 1e8 * penalty_alpha -- the point at which float64
+            precision is genuinely exhausted. When None, a legacy fixed
+            threshold of 1e14 is used.
+
+    Returns:
+        NDArray[np.float64]: Full displacement vector u, shape (n,).
+
+    Raises:
+        np.linalg.LinAlgError: If K_mod is singular.
+
+    Notes:
+        cond(K_mod) is proportional to penalty_alpha by construction, so a
+        fixed absolute threshold trips routinely for well-posed models when
+        penalty_alpha is large. The penalty-aware threshold
+        (1e8 * penalty_alpha) is calibrated to float64 precision: loss of
+        digits is cond * 2e-16, so cond > 1e16 is the point where double
+        precision is actually exhausted.
+    """
+    cond = float(np.linalg.cond(K_mod))
+    logger.debug("K_mod condition number: %.3e", cond)
+    threshold = 1.0e8 * penalty_alpha if penalty_alpha is not None else 1.0e14
+    if cond > threshold:
+        normalized = cond / penalty_alpha if penalty_alpha is not None else cond
+        logger.warning(
+            "K_mod is nearly singular (cond=%.3e, cond/penalty_alpha=%.3e). "
+            "The natural free-partition stiffness is rank-deficient -- check "
+            "for mechanisms, coincident nodes, or DOFs without any stiffness "
+            "contribution.", cond, normalized,
+        )
 
     try:
-        u_f = np.linalg.solve(K_ff, F_f)
+        u = np.linalg.solve(K_mod, F_mod)
     except np.linalg.LinAlgError as exc:
         raise np.linalg.LinAlgError(
             f"Stiffness matrix is singular -- check boundary conditions. "
             f"Original error: {exc}"
         ) from exc
 
-    # Reconstruct full displacement vector (constrained DOFs remain 0)
-    u = np.zeros(n_total_dofs)
-    for local_idx, global_idx in enumerate(free_dofs):
-        u[global_idx] = u_f[local_idx]
-
     logger.debug("Max displacement: %.6e", float(np.max(np.abs(u))))
     return u
-
-
-def compute_reactions(
-    K: NDArray[np.float64],
-    u: NDArray[np.float64],
-    F: NDArray[np.float64],
-    constrained_dofs: list[int],
-) -> NDArray[np.float64]:
-    """Compute reaction forces at constrained DOFs.
-
-    R = K[constrained, :] @ u - F[constrained]
-
-    Args:
-        K (NDArray[np.float64]): Full global stiffness matrix of shape (n_dofs, n_dofs).
-        u (NDArray[np.float64]): Full displacement vector of shape (n_dofs,).
-        F (NDArray[np.float64]): Full global force vector of shape (n_dofs,).
-        constrained_dofs (list[int]): Global indices of constrained DOFs.
-
-    Returns:
-        NDArray[np.float64]: Reaction vector of shape (n_constrained,),
-            same order as constrained_dofs.
-    """
-    R = K[constrained_dofs, :] @ u - F[constrained_dofs]
-    logger.debug("Reactions: %s", R)
-    return R
 
 
 def run_solve_pipeline(
@@ -101,43 +102,47 @@ def run_solve_pipeline(
     K: NDArray[np.float64],
     F: NDArray[np.float64],
 ) -> SolutionResult:
-    """Orchestrate the full solve pipeline.
+    """Orchestrate the full penalty-method solve pipeline.
 
     Steps:
-      1. get_constrained_dof_indices
-      2. get_free_dof_indices
-      3. apply_constraints_reduction -> K_ff, F_f
-      4. solve_displacements -> u (full)
-      5. compute_reactions -> R
-      6. Return SolutionResult
+      1. compute_penalty_parameter -> k_penalty
+      2. apply_penalty_constraints -> K_mod, F_mod
+      3. solve_system -> u (full displacement vector)
+      4. compute_constraint_residuals -> reactions (per constraint)
+      5. Return SolutionResult
 
     Args:
-        model: The FEA model (provides BCs).
-        dof_map: DOF index mapping.
-        K: Full global stiffness matrix.
-        F: Full global force vector.
+        model (FEAModel): FEA model supplying constraints and penalty_alpha.
+        dof_map (DOFMap): DOF index mapping.
+        K (NDArray[np.float64]): Natural global stiffness matrix.
+        F (NDArray[np.float64]): Global force vector.
 
     Returns:
-        SolutionResult with displacements, reactions, dof_map, and model.
+        SolutionResult: Displacements, per-constraint reactions, dof_map, model.
 
     Notes:
-        Pipeline applies constraint reduction method: partition K and F into
-        free (f) and constrained (c) DOFs, solve the reduced system K_ff*u_f = F_f,
-        then recover reactions using full stiffness and all DOFs.
+        reactions[i] in the returned SolutionResult corresponds to
+        model.boundary_conditions[i]. The penalty parameter is stored
+        implicitly in model.penalty_alpha and reconstructed from K's diagonal.
     """
-    constrained = get_constrained_dof_indices(model, dof_map)
-    free = get_free_dof_indices(model, dof_map)
+    k_penalty = compute_penalty_parameter(K, model.penalty_alpha)
+    K_mod, F_mod = apply_penalty_constraints(
+        K, F, model.boundary_conditions, dof_map, k_penalty
+    )
+    u = solve_system(K_mod, F_mod, penalty_alpha=model.penalty_alpha)
+    reactions = compute_constraint_residuals(
+        u, model.boundary_conditions, dof_map, k_penalty
+    )
 
-    K_ff, F_f = apply_constraints_reduction(K, F, constrained)
-    u = solve_displacements(K_ff, F_f, free, constrained, dof_map.total_dofs)
-    R = compute_reactions(K, u, F, constrained)
-
-    logger.info("Solve complete: max|u|=%.4e, max|R|=%.4e",
-                float(np.max(np.abs(u))), float(np.max(np.abs(R))))
+    logger.info(
+        "Solve complete: max|u|=%.4e, max|R|=%.4e",
+        float(np.max(np.abs(u))),
+        float(np.max(np.abs(reactions))) if len(reactions) > 0 else 0.0,
+    )
 
     return SolutionResult(
         displacements=u,
-        reactions=R,
+        reactions=reactions,
         dof_map=dof_map,
         model=model,
     )

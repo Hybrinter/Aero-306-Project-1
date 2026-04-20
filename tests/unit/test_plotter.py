@@ -7,9 +7,11 @@ import matplotlib
 matplotlib.use("Agg")  # non-interactive backend for tests
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
+from fea_solver.assembler import build_dof_map
 from fea_solver.models import (
-    BoundaryCondition, BoundaryConditionType, Element, ElementResult, ElementType,
-    FEAModel, MaterialProperties, Mesh, Node, SolutionSeries, UnitSystem,
+    DOFMap, DOFType, Element, ElementResult, ElementType,
+    FEAModel, LinearConstraint, MaterialProperties, Mesh, Node,
+    SolutionResult, SolutionSeries, UnitSystem,
 )
 from fea_solver.plotter import (
     plot_axial_displacement,
@@ -25,10 +27,11 @@ def _make_model(unit_system: UnitSystem = UnitSystem.SI) -> FEAModel:
     mat = MaterialProperties(E=1.0, A=1.0, I=1.0)
     n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
     elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.BEAM, material=mat)
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_ALL)
+    c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+    c_t = LinearConstraint(node_id=1, coefficients=(0.0, 0.0, 1.0))
     return FEAModel(
         mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-        boundary_conditions=(bc,),
+        boundary_conditions=(c_v, c_t),
         nodal_loads=(),
         distributed_loads=(),
         label="test",
@@ -69,8 +72,244 @@ def _make_series(
 ) -> SolutionSeries:
     """Build a SolutionSeries with a single ElementResult for plotter tests."""
     model = _make_model(unit_system)
+    dof_map = build_dof_map(model)
+    result_stub = SolutionResult(
+        displacements=np.zeros(dof_map.total_dofs),
+        reactions=np.zeros(0),
+        dof_map=dof_map,
+        model=model,
+    )
     er = make_element_result(x_start=x_start, x_end=x_end)
-    return SolutionSeries(label=label, element_results=(er,), model=model)
+    return SolutionSeries(label=label, element_results=(er,), model=model, result=result_stub)
+
+
+def _make_truss_model() -> FEAModel:
+    """Build a minimal two-node TRUSS FEAModel for truss plotter tests."""
+    mat = MaterialProperties(E=200e9, A=0.01, I=0.0)
+    n1 = Node(1, (0.0, 0.0))
+    n2 = Node(2, (3.0, 4.0))
+    elem = Element(id=1, node_i=n1, node_j=n2, element_type=ElementType.TRUSS, material=mat)
+    c1 = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0))
+    c2 = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+    return FEAModel(
+        mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
+        boundary_conditions=(c1, c2),
+        nodal_loads=(),
+        distributed_loads=(),
+        label="test_truss",
+    )
+
+
+def _make_truss_series(axial_force: float = 50.0) -> SolutionSeries:
+    """Build a SolutionSeries with a single TRUSS ElementResult."""
+    model = _make_truss_model()
+    dof_map = build_dof_map(model)
+    # TRUSS 2-node: DOFs are (node1,U)=0, (node1,V)=1, (node2,U)=2, (node2,V)=3
+    u = np.zeros(dof_map.total_dofs)
+    u[dof_map.index(2, DOFType.U)] = 0.001
+    u[dof_map.index(2, DOFType.V)] = -0.002
+    result = SolutionResult(
+        displacements=u,
+        reactions=np.zeros(0),
+        dof_map=dof_map,
+        model=model,
+    )
+    er = ElementResult(
+        element_id=1,
+        axial_force=axial_force,
+        shear_forces=np.zeros(5),
+        bending_moments=np.zeros(5),
+        x_stations=np.linspace(0.0, 3.0, 5),
+        transverse_displacements=np.zeros(5),
+        axial_displacements=np.zeros(5),
+        rotations=np.zeros(5),
+    )
+    return SolutionSeries(label="test", element_results=(er,), model=model, result=result)
+
+
+class TestTrussHelpers:
+    """Tests for private truss plotting helpers."""
+
+    def test_colormap_norm_symmetric_range(self) -> None:
+        """Norm vmin and vmax are symmetric about zero."""
+        from fea_solver.plotter import _truss_colormap_norm
+        cmap, norm = _truss_colormap_norm([10.0, -5.0, 3.0])
+        assert norm.vmax == pytest.approx(10.0)
+        assert norm.vmin == pytest.approx(-10.0)
+        assert norm.vcenter == pytest.approx(0.0)
+
+    def test_colormap_norm_all_zero_fallback(self) -> None:
+        """All-zero values use fallback norm vmin=-1, vmax=1."""
+        from fea_solver.plotter import _truss_colormap_norm
+        cmap, norm = _truss_colormap_norm([0.0, 0.0])
+        assert norm.vmax == pytest.approx(1.0)
+        assert norm.vmin == pytest.approx(-1.0)
+
+    def test_colormap_returns_coolwarm(self) -> None:
+        """Returned colormap is coolwarm."""
+        from fea_solver.plotter import _truss_colormap_norm
+        cmap, _ = _truss_colormap_norm([1.0])
+        assert "coolwarm" in cmap.name
+
+    def test_node_displacements_keys(self) -> None:
+        """Node displacement dict has an entry for every node."""
+        from fea_solver.plotter import _truss_node_displacements
+        sol = _make_truss_series()
+        disps = _truss_node_displacements(sol)
+        assert set(disps.keys()) == {1, 2}
+
+    def test_node_displacements_values(self) -> None:
+        """Extracted displacements match what was put into the displacement vector."""
+        from fea_solver.plotter import _truss_node_displacements
+        sol = _make_truss_series()
+        disps = _truss_node_displacements(sol)
+        assert disps[1] == pytest.approx((0.0, 0.0))
+        assert disps[2][0] == pytest.approx(0.001)
+        assert disps[2][1] == pytest.approx(-0.002)
+
+
+class TestPlotTrussForces:
+    """Tests for plot_truss_forces."""
+
+    def test_returns_figure(self) -> None:
+        """plot_truss_forces returns a matplotlib Figure."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series())
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """plot_truss_forces saves a PNG when output_path is given."""
+        from fea_solver.plotter import plot_truss_forces
+        out = tmp_path / "forces.png"
+        fig = plot_truss_forces(_make_truss_series(), output_path=out)
+        assert out.exists()
+        plt.close(fig)
+
+    def test_has_colorbar(self) -> None:
+        """plot_truss_forces figure contains a colorbar axes."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series())
+        assert len(fig.axes) >= 2
+        plt.close(fig)
+
+    def test_title_set(self) -> None:
+        """Custom title is applied to the axes."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series(), title="My Forces")
+        assert fig.axes[0].get_title() == "My Forces"
+        plt.close(fig)
+
+    def test_compression_series_no_crash(self) -> None:
+        """plot_truss_forces handles all-compression (negative) forces."""
+        from fea_solver.plotter import plot_truss_forces
+        fig = plot_truss_forces(_make_truss_series(axial_force=-80.0))
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+
+class TestPlotTrussDeformed:
+    """Tests for plot_truss_deformed."""
+
+    def test_returns_figure(self) -> None:
+        """plot_truss_deformed returns a matplotlib Figure."""
+        from fea_solver.plotter import plot_truss_deformed
+        fig = plot_truss_deformed(_make_truss_series())
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """plot_truss_deformed saves PNG when output_path given."""
+        from fea_solver.plotter import plot_truss_deformed
+        out = tmp_path / "deformed.png"
+        fig = plot_truss_deformed(_make_truss_series(), output_path=out)
+        assert out.exists()
+        plt.close(fig)
+
+    def test_scale_factor_in_title(self) -> None:
+        """Scale factor string appears in the plot title."""
+        from fea_solver.plotter import plot_truss_deformed
+        fig = plot_truss_deformed(_make_truss_series(), title="Deformed")
+        title_text = fig.axes[0].get_title()
+        assert "scale" in title_text
+        assert "x" in title_text
+        plt.close(fig)
+
+    def test_has_colorbar(self) -> None:
+        """plot_truss_deformed figure contains a colorbar axes."""
+        from fea_solver.plotter import plot_truss_deformed
+        fig = plot_truss_deformed(_make_truss_series())
+        assert len(fig.axes) >= 2
+        plt.close(fig)
+
+    def test_zero_displacement_no_crash(self) -> None:
+        """plot_truss_deformed handles zero displacement (scale fallback to 1.0)."""
+        from fea_solver.plotter import plot_truss_deformed
+        model = _make_truss_model()
+        dof_map = build_dof_map(model)
+        result_zero = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs),
+            reactions=np.zeros(0),
+            dof_map=dof_map,
+            model=model,
+        )
+        er = ElementResult(
+            element_id=1,
+            axial_force=0.0,
+            shear_forces=np.zeros(5),
+            bending_moments=np.zeros(5),
+            x_stations=np.linspace(0.0, 3.0, 5),
+            transverse_displacements=np.zeros(5),
+            axial_displacements=np.zeros(5),
+            rotations=np.zeros(5),
+        )
+        sol = SolutionSeries(label="zero", element_results=(er,), model=model, result=result_zero)
+        fig = plot_truss_deformed(sol)
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+
+class TestPlotTrussStress:
+    """Tests for plot_truss_stress."""
+
+    def test_returns_figure(self) -> None:
+        """plot_truss_stress returns a matplotlib Figure."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series())
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_saves_to_file(self, tmp_path: Path) -> None:
+        """plot_truss_stress saves PNG when output_path given."""
+        from fea_solver.plotter import plot_truss_stress
+        out = tmp_path / "stress.png"
+        fig = plot_truss_stress(_make_truss_series(), output_path=out)
+        assert out.exists()
+        plt.close(fig)
+
+    def test_has_colorbar(self) -> None:
+        """plot_truss_stress figure contains a colorbar axes."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series())
+        assert len(fig.axes) >= 2
+        plt.close(fig)
+
+    def test_colorbar_label_contains_stress_unit(self) -> None:
+        """Colorbar label contains force and length units for SI model."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series())
+        colorbar_ax = fig.axes[1]
+        ylabel = colorbar_ax.get_ylabel()
+        assert "N" in ylabel
+        assert "m" in ylabel
+        plt.close(fig)
+
+    def test_title_set(self) -> None:
+        """Custom title is applied."""
+        from fea_solver.plotter import plot_truss_stress
+        fig = plot_truss_stress(_make_truss_series(), title="My Stress")
+        assert fig.axes[0].get_title() == "My Stress"
+        plt.close(fig)
 
 
 class TestPlotShearForceDiagram:
@@ -85,8 +324,13 @@ class TestPlotShearForceDiagram:
     def test_handles_multiple_elements(self) -> None:
         """SFD plot handles multiple elements in a series."""
         model = _make_model()
+        dof_map = build_dof_map(model)
+        result_stub = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs), reactions=np.zeros(0),
+            dof_map=dof_map, model=model,
+        )
         ers = tuple(make_element_result(i + 1, float(i), float(i + 1)) for i in range(3))
-        series = SolutionSeries(label="multi", element_results=ers, model=model)
+        series = SolutionSeries(label="multi", element_results=ers, model=model, result=result_stub)
         fig = plot_shear_force_diagram([series], title="Multi-element SFD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
@@ -125,8 +369,13 @@ class TestPlotBendingMomentDiagram:
     def test_handles_multiple_elements(self) -> None:
         """BMD plot handles multiple elements."""
         model = _make_model()
+        dof_map = build_dof_map(model)
+        result_stub = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs), reactions=np.zeros(0),
+            dof_map=dof_map, model=model,
+        )
         ers = tuple(make_element_result(i + 1, float(i), float(i + 1)) for i in range(3))
-        series = SolutionSeries(label="multi", element_results=ers, model=model)
+        series = SolutionSeries(label="multi", element_results=ers, model=model, result=result_stub)
         fig = plot_bending_moment_diagram([series], title="Multi-element BMD")
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
@@ -322,3 +571,88 @@ class TestMultiSeriesPlots:
         first_line = next(ln for ln in ax.get_lines() if ln.get_label().startswith("V(x)"))
         assert first_line.get_linestyle() == "-"
         plt.close(fig)
+
+
+class TestSolutionSeriesResult:
+    """Tests that SolutionSeries carries a SolutionResult."""
+
+    def test_solution_series_has_result_field(self) -> None:
+        """SolutionSeries constructed with result field is accessible via .result."""
+        model = _make_model()
+        dof_map = build_dof_map(model)
+        result_stub = SolutionResult(
+            displacements=np.zeros(dof_map.total_dofs),
+            reactions=np.zeros(0),
+            dof_map=dof_map,
+            model=model,
+        )
+        er = make_element_result()
+        sol = SolutionSeries(
+            label="test",
+            element_results=(er,),
+            model=model,
+            result=result_stub,
+        )
+        assert sol.result is result_stub
+
+
+class TestTrussDeformedWithBuckling:
+    """plot_truss_deformed gains an optional buckling overlay."""
+
+    def test_default_kwarg_is_none_backward_compatible(self) -> None:
+        """Calling without buckling kwarg yields the same figure as before."""
+        from fea_solver.plotter import plot_truss_deformed
+        sol = _make_truss_series(axial_force=-100.0)
+        fig = plot_truss_deformed(sol)
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_overlay_draws_extra_line_per_buckled_member(self) -> None:
+        """One extra Line2D artist per buckled member appears on the axes."""
+        from fea_solver.models import MemberBuckling
+        from fea_solver.plotter import plot_truss_deformed
+        sol = _make_truss_series(axial_force=-1000.0)
+
+        fig0 = plot_truss_deformed(sol)
+        n0 = len(fig0.axes[0].get_lines())
+        plt.close(fig0)
+
+        mb = MemberBuckling(
+            element_id=1, P_cr=500.0, axial_force=-1000.0,
+            ratio=2.0, is_buckled=True,
+        )
+        fig1 = plot_truss_deformed(sol, buckling=(mb,))
+        lines = fig1.axes[0].get_lines()
+        n1 = len(lines)
+        dashed = [ln for ln in lines if ln.get_linestyle() == "--"]
+        plt.close(fig1)
+
+        assert n1 == n0 + 1, (
+            f"Expected one extra Line2D for the buckled bow "
+            f"(baseline {n0}, with overlay {n1})."
+        )
+        assert len(dashed) == 1
+        bow = dashed[0]
+        assert bow.get_color() == "black"
+        assert bow.get_linewidth() == 1.5
+        assert bow.get_zorder() == 4
+
+    def test_non_buckled_entry_adds_no_overlay(self) -> None:
+        """A MemberBuckling with is_buckled=False produces no extra lines."""
+        from fea_solver.models import MemberBuckling
+        from fea_solver.plotter import plot_truss_deformed
+        sol = _make_truss_series(axial_force=-10.0)
+
+        fig0 = plot_truss_deformed(sol)
+        n0 = len(fig0.axes[0].get_lines())
+        plt.close(fig0)
+
+        mb = MemberBuckling(
+            element_id=1, P_cr=500.0, axial_force=-10.0,
+            ratio=0.02, is_buckled=False,
+        )
+        fig1 = plot_truss_deformed(sol, buckling=(mb,))
+        n1 = len(fig1.axes[0].get_lines())
+        plt.close(fig1)
+
+        assert n1 == n0

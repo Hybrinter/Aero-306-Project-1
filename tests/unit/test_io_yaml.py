@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import pydantic
 from fea_solver.io_yaml import load_model_from_yaml, load_models_from_yaml
-from fea_solver.models import ElementType, BoundaryConditionType, LoadType, DOFType
+from fea_solver.models import ElementType, LoadType, DOFType, LinearConstraint
 from fea_solver.units import UnitSystem
 
 # Use a temporary YAML file for tests
@@ -30,8 +30,7 @@ materials:
     A: 0.01
     I: 0.0
 boundary_conditions:
-  - node_id: 1
-    type: fixed_u
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
 loads:
   nodal:
     - node_id: 2
@@ -62,8 +61,9 @@ materials:
     A: 0.05
     I: 1.0e-4
 boundary_conditions:
-  - node_id: 1
-    type: fixed_all
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
 loads:
   nodal:
     - node_id: 2
@@ -134,12 +134,15 @@ class TestLoadModelFromYaml:
         assert mat.E == pytest.approx(200.0e9)
         assert mat.A == pytest.approx(0.01)
 
-    def test_boundary_condition_type(self, bar_yaml_path: Path) -> None:
-        """Boundary condition type is parsed correctly."""
+    def test_boundary_condition_parsed(self, bar_yaml_path: Path) -> None:
+        """Boundary condition is parsed into a LinearConstraint with correct fields."""
         model = load_model_from_yaml(bar_yaml_path)
         assert len(model.boundary_conditions) == 1
-        assert model.boundary_conditions[0].bc_type == BoundaryConditionType.FIXED_U
-        assert model.boundary_conditions[0].node_id == 1
+        c = model.boundary_conditions[0]
+        assert c.node_id == 1
+        # [1.0, 0.0, 0.0] after normalization (already unit length)
+        assert c.coefficients == pytest.approx((1.0, 0.0, 0.0))
+        assert c.rhs == pytest.approx(0.0)
 
     def test_nodal_load_parsed(self, bar_yaml_path: Path) -> None:
         """Nodal load is parsed correctly."""
@@ -185,7 +188,9 @@ solutions:
     materials:
       steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
+      - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 2, type: point_force_y, magnitude: -1000.0}
@@ -201,7 +206,9 @@ solutions:
     materials:
       steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
+      - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 3, type: point_force_y, magnitude: -1000.0}
@@ -222,7 +229,9 @@ solutions:
     materials:
       steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
+      - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
     loads: {}
 """
 
@@ -240,7 +249,9 @@ solutions:
     materials:
       alum: {E: 10000000.0, A: 0.01, I: 0.001}
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
+      - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 2, type: point_force_y, magnitude: -5.0}
@@ -256,7 +267,9 @@ solutions:
     materials:
       alum: {E: 10000000.0, A: 0.01, I: 0.001}
     boundary_conditions:
-      - {node_id: 1, type: fixed_all}
+      - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+      - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
     loads:
       nodal:
         - {node_id: 3, type: point_force_y, magnitude: -5.0}
@@ -371,8 +384,8 @@ mesh:
 materials:
   steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
 boundary_conditions:
-  - {node_id: 1, type: pin}
-  - {node_id: 3, type: roller}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}
 loads:
   distributed:
     - element_ids: all
@@ -394,8 +407,8 @@ mesh:
 materials:
   steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
 boundary_conditions:
-  - {node_id: 1, type: pin}
-  - {node_id: 3, type: roller}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}
 loads:
   distributed:
     - element_ids: [1]
@@ -415,7 +428,9 @@ mesh:
 materials:
   steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
 boundary_conditions:
-  - {node_id: 1, type: fixed_all}
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
 loads:
   distributed:
     - element_ids: all
@@ -436,7 +451,9 @@ mesh:
 materials:
   steel: {E: 200.0e9, A: 0.01, I: 1.0e-4}
 boundary_conditions:
-  - {node_id: 1, type: fixed_all}
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 0.0, 1.0]}
 loads:
   distributed:
     - element_ids: [99]
@@ -514,7 +531,7 @@ materials:
     A: 0.01
     I: 0.0
 boundary_conditions:
-  - {node_id: 1, type: pin}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
 loads:
   nodal:
     - {node_id: 2, type: point_force_x, magnitude: 1000.0}

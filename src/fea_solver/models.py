@@ -5,13 +5,17 @@ design principles. Enums provide type-safe dispatch throughout the system.
 
 Key types:
   Node, Element, Mesh, MaterialProperties: geometric and material data.
-  BoundaryCondition, NodalLoad, DistributedLoad: applied constraints and loads.
-  FEAModel: complete problem definition (mesh + BCs + loads).
+  LinearConstraint, NodalLoad, DistributedLoad: applied constraints and loads.
+  FEAModel: complete problem definition; boundary conditions enforced via
+      penalty method (penalty_alpha scales penalty stiffness).
   DOFMap: (node_id, DOFType) -> global DOF index mapping.
   SolutionResult: displacements and reactions from a single solve.
   ElementResult: internal forces, moments, and displacements at sampling stations.
   SolutionSeries: bundle of ElementResults + model for one named mesh refinement;
       used when overlaying multiple solutions on shared plot axes.
+  MemberBuckling: per-element Euler buckling result (P_cr, axial force, ratio,
+      buckled flag); tension members carry ratio = 0.0 to allow sign-based
+      TENSION vs SAFE discrimination downstream.
 """
 
 from __future__ import annotations
@@ -74,31 +78,6 @@ class DOFType(Enum):
     U = "u"        # axial displacement [canonical length unit]
     V = "v"        # transverse displacement [canonical length unit]
     THETA = "theta"  # rotation [rad]
-
-
-class BoundaryConditionType(Enum):
-    """Enumeration of kinematic constraint types applied at nodes.
-
-    Fields:
-        FIXED_U: Constrain axial DOF (U) only.
-        FIXED_V: Constrain transverse DOF (V) only.
-        FIXED_THETA: Constrain rotation DOF (THETA) only.
-        FIXED_ALL: Constrain all DOFs present at the node.
-        PIN: Constrain axial (U) and transverse (V), leave rotation (THETA) free.
-        ROLLER: Constrain transverse DOF (V) only.
-
-    Notes:
-        Applied during constraint application via the reduction method. A constraint
-        is only active if the corresponding DOF exists at the node (e.g., PIN on a
-        BEAM node constrains only V, not U, since BEAM has no U DOF).
-    """
-
-    FIXED_U = auto()      # constrain axial DOF only
-    FIXED_V = auto()      # constrain transverse DOF only
-    FIXED_THETA = auto()  # constrain rotation DOF only
-    FIXED_ALL = auto()    # constrain all DOFs present at node
-    PIN = auto()          # constrain u and v, leave theta free
-    ROLLER = auto()       # constrain v only
 
 
 class LoadType(Enum):
@@ -242,20 +221,33 @@ class Element:
 
 
 @dataclass(frozen=True, slots=True)
-class BoundaryCondition:
-    """Kinematic constraint (boundary condition) applied at a node.
+class LinearConstraint:
+    """One scalar linear constraint equation applied at a node.
+
+    Encodes the constraint: a_U*u + a_V*v + a_THETA*theta = rhs
 
     Fields:
-        node_id (int): Unique identifier of the constrained node.
-        bc_type (BoundaryConditionType): Type of constraint to apply.
+        node_id (int): Node at which the constraint is applied.
+        coefficients (tuple[float, float, float]): Constraint direction vector
+            in [U, V, THETA] DOF order (global coordinates). Typically normalized
+            to unit length by the YAML parser (_schema_to_model) so that
+            compute_constraint_residuals returns physically meaningful reaction
+            magnitudes. Non-zero components for DOFs absent at the node raise
+            ValueError during constraint application.
+        rhs (float): Prescribed displacement or rotation value. Units are metres
+            (for U/V constraints) or radians (for THETA constraints). Default 0.0
+            (homogeneous constraint).
 
     Notes:
-        Frozen and slotted. Applied during constraint application via the
-        reduction method. Only DOFs that exist at the node are constrained.
+        Applied via the penalty method: adds k_penalty * outer(g, g) to K
+        and k_penalty * rhs * g to F, where g is the global-length coefficient
+        vector: g[dof_index] = coefficients[i] for each DOF type present at the
+        node, zeros elsewhere.
     """
 
     node_id: int
-    bc_type: BoundaryConditionType
+    coefficients: tuple[float, float, float]
+    rhs: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,12 +318,17 @@ class FEAModel:
 
     Fields:
         mesh (Mesh): Spatial discretization with nodes and elements.
-        boundary_conditions (tuple[BoundaryCondition, ...]): Kinematic constraints.
+        boundary_conditions (tuple[LinearConstraint, ...]): Penalty-enforced
+            kinematic constraints. Each entry is one scalar linear equation
+            in the node's [U, V, THETA] DOF space.
         nodal_loads (tuple[NodalLoad, ...]): Concentrated forces and moments.
         distributed_loads (tuple[DistributedLoad, ...]): Distributed loads over elements.
         label (str): Optional descriptive label. Default "unnamed".
         unit_system (UnitSystem): Canonical unit system all numeric values are stored in.
             Default UnitSystem.SI. Determines reporter column-header labels.
+        penalty_alpha (float): Dimensionless scale factor for penalty stiffness. The penalty
+            parameter used during constraint enforcement is computed as
+            penalty_alpha * max(abs(diag(K))). Default 1e8.
 
     Notes:
         Frozen and slotted. Immutable after construction; use dataclasses.replace()
@@ -342,11 +339,12 @@ class FEAModel:
     """
 
     mesh: Mesh
-    boundary_conditions: tuple[BoundaryCondition, ...]
+    boundary_conditions: tuple[LinearConstraint, ...]
     nodal_loads: tuple[NodalLoad, ...]
     distributed_loads: tuple[DistributedLoad, ...]
     label: str = "unnamed"
     unit_system: UnitSystem = UnitSystem.SI
+    penalty_alpha: float = 1e8
 
 
 # ---------------------------------------------------------------------------
@@ -484,15 +482,54 @@ class SolutionSeries:
             element results for all elements in this solution's mesh.
         model (FEAModel): The FEA model that produced these results; used to retrieve
             unit labels for axis annotations.
+        result (SolutionResult): Full solution result carrying the displacement vector
+            and DOF map. Required by truss deformed-shape plots to recover nodal (U, V).
 
     Notes:
         Frozen and slotted, matching the style of all other result containers.
         element_results is a tuple (not list) to satisfy the frozen invariant.
         At call sites, wrap a list with tuple(): tuple(element_results_list).
         The model is carried here (not recovered from ElementResult) because
-        ElementResult does not hold a model reference.
+        ElementResult does not hold a model reference. result carries the full
+        displacement vector needed by truss deformed-shape plots to recover
+        nodal (U, V) translations.
     """
 
     label: str
     element_results: tuple[ElementResult, ...]
     model: FEAModel
+    result: SolutionResult
+
+
+# ---------------------------------------------------------------------------
+# Buckling
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class MemberBuckling:
+    """Euler buckling result for one TRUSS member.
+
+    Fields:
+        element_id (int): Identifier of the TRUSS element this result belongs to.
+        P_cr (float): Euler critical load pi^2 * E * I / L^2 [force units].
+            Always positive.
+        axial_force (float): Signed axial force [force units] copied from
+            ElementResult.axial_force. Positive = tension, negative = compression.
+        ratio (float): abs(axial_force) / P_cr when axial_force < 0; 0.0 when
+            axial_force >= 0. Dimensionless.
+        is_buckled (bool): True iff axial_force < 0 and abs(axial_force) >= P_cr.
+
+    Notes:
+        Frozen and slotted; immutable after construction. Produced only for
+        elements with element_type == TRUSS. Tension members are included in
+        the returned tuple with ratio = 0.0 and is_buckled = False so that the
+        downstream reporter can distinguish TENSION from SAFE compressive
+        members by the sign of axial_force.
+    """
+
+    element_id: int
+    P_cr: float
+    axial_force: float
+    ratio: float
+    is_buckled: bool

@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from fea_solver.models import (
-    BoundaryCondition, BoundaryConditionType, DistributedLoad, DOFType,
-    Element, ElementType, FEAModel, LoadType, MaterialProperties, Mesh, Node, NodalLoad
+    DistributedLoad, DOFType,
+    Element, ElementType, FEAModel, LinearConstraint, LoadType, MaterialProperties, Mesh, Node, NodalLoad
 )
 from fea_solver.assembler import (
     build_dof_map, get_element_dof_indices,
@@ -21,9 +21,9 @@ def make_bar_model(n_nodes: int = 2) -> FEAModel:
         for i in range(n_nodes - 1)
     )
     mesh = Mesh(nodes=nodes, elements=elements)
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_U)
+    c = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0))
     load = NodalLoad(node_id=n_nodes, load_type=LoadType.POINT_FORCE_X, magnitude=1.0)
-    return FEAModel(mesh=mesh, boundary_conditions=(bc,), nodal_loads=(load,),
+    return FEAModel(mesh=mesh, boundary_conditions=(c,), nodal_loads=(load,),
                     distributed_loads=(), label=f"bar_{n_nodes}_nodes")
 
 def make_beam_model(n_nodes: int = 2) -> FEAModel:
@@ -36,9 +36,10 @@ def make_beam_model(n_nodes: int = 2) -> FEAModel:
         for i in range(n_nodes - 1)
     )
     mesh = Mesh(nodes=nodes, elements=elements)
-    bc = BoundaryCondition(node_id=1, bc_type=BoundaryConditionType.FIXED_ALL)
+    c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+    c_t = LinearConstraint(node_id=1, coefficients=(0.0, 0.0, 1.0))
     load = NodalLoad(node_id=n_nodes, load_type=LoadType.POINT_FORCE_Y, magnitude=-1.0)
-    return FEAModel(mesh=mesh, boundary_conditions=(bc,), nodal_loads=(load,),
+    return FEAModel(mesh=mesh, boundary_conditions=(c_v, c_t), nodal_loads=(load,),
                     distributed_loads=(), label=f"beam_{n_nodes}_nodes")
 
 
@@ -176,9 +177,10 @@ class TestAssembleGlobalForceVector:
         n1, n2 = Node(1, (0.0, 0.0)), Node(2, (1.0, 0.0))
         elem = Element(id=1, node_i=n1, node_j=n2,
                        element_type=ElementType.BAR, material=mat)
+        c = LinearConstraint(node_id=1, coefficients=(1.0, 0.0, 0.0))
         model = FEAModel(
             mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-            boundary_conditions=(BoundaryCondition(1, BoundaryConditionType.FIXED_U),),
+            boundary_conditions=(c,),
             nodal_loads=(), distributed_loads=(), label="no_loads"
         )
         dof_map = build_dof_map(model)
@@ -194,9 +196,11 @@ class TestAssembleGlobalForceVector:
                        element_type=ElementType.BEAM, material=mat)
         dist_load = DistributedLoad(element_id=1, load_type=LoadType.DISTRIBUTED_Y,
                                     w_i=-1.0, w_j=-1.0)
+        c_v = LinearConstraint(node_id=1, coefficients=(0.0, 1.0, 0.0))
+        c_t = LinearConstraint(node_id=1, coefficients=(0.0, 0.0, 1.0))
         model = FEAModel(
             mesh=Mesh(nodes=(n1, n2), elements=(elem,)),
-            boundary_conditions=(BoundaryCondition(1, BoundaryConditionType.FIXED_ALL),),
+            boundary_conditions=(c_v, c_t),
             nodal_loads=(), distributed_loads=(dist_load,), label="beam_udl"
         )
         dof_map = build_dof_map(model)

@@ -19,7 +19,11 @@ Expected YAML schema:
     elements: [{id: int, node_i: int, node_j: int, type: str, material: str}, ...]
   materials:
     <name>: {E: float, A: float, I: float}
-  boundary_conditions: [{node_id: int, type: str}, ...]
+  boundary_conditions:
+    - node_id: int
+      coefficients: [float, float, float]   # [a_U, a_V, a_THETA], normalized to unit length
+      rhs: float                             # optional, default 0.0
+  penalty_alpha: float                       # optional, default 1.0e8
   loads:
     nodal: [{node_id: int, type: str, magnitude: float}, ...]
     distributed:
@@ -31,7 +35,7 @@ _UnitsSchema:          Pydantic schema for the optional units block.
 _NodeSchema:           Pydantic schema for a single node entry.
 _MaterialSchema:       Pydantic schema for material properties; enforces E > 0, A > 0, I >= 0.
 _ElementSchema:        Pydantic schema for a single element entry (refs resolved later).
-_BCSchema:             Pydantic schema for a single boundary condition entry.
+_LinearConstraintSchema: Pydantic schema for a single linear constraint entry.
 _NodalLoadSchema:      Pydantic schema for a single nodal load entry.
 _DistributedLoadFunctionSchema: Pydantic schema for a function-based distributed load entry.
 _LoadsSchema:          Pydantic schema for the loads block; defaults both sublists to empty.
@@ -59,12 +63,11 @@ import yaml
 from pydantic import BaseModel, Field
 
 from fea_solver.models import (
-    BoundaryCondition,
-    BoundaryConditionType,
     DistributedLoad,
     Element,
     ElementType,
     FEAModel,
+    LinearConstraint,
     LoadType,
     MaterialProperties,
     Mesh,
@@ -91,14 +94,6 @@ _ELEMENT_TYPE_MAP: dict[str, ElementType] = {
     "truss": ElementType.TRUSS,
 }
 
-_BC_TYPE_MAP: dict[str, BoundaryConditionType] = {
-    "fixed_u":     BoundaryConditionType.FIXED_U,
-    "fixed_v":     BoundaryConditionType.FIXED_V,
-    "fixed_theta": BoundaryConditionType.FIXED_THETA,
-    "fixed_all":   BoundaryConditionType.FIXED_ALL,
-    "pin":         BoundaryConditionType.PIN,
-    "roller":      BoundaryConditionType.ROLLER,
-}
 
 _LOAD_TYPE_MAP: dict[str, LoadType] = {
     "point_force_x":      LoadType.POINT_FORCE_X,
@@ -252,20 +247,24 @@ class _ElementSchema(BaseModel):
     material: str
 
 
-class _BCSchema(BaseModel):
-    """Pydantic schema for a single boundary condition entry.
+class _LinearConstraintSchema(BaseModel):
+    """Pydantic schema for a single linear constraint entry.
 
     Args:
         node_id (int): ID of the constrained node.
-        type (str): BC type string -- one of "fixed_u", "fixed_v", "fixed_theta",
-            "fixed_all", "pin", "roller".
+        coefficients (list[float]): Constraint direction in [U, V, THETA] DOF order.
+            Must have exactly 3 elements. The magnitude must be > 0. The vector
+            is normalized to unit length during conversion in _schema_to_model.
+        rhs (float): Prescribed displacement/rotation value. Default 0.0.
 
     Notes:
-        String-to-enum conversion and node_id validation happen in _schema_to_model.
+        Non-zero coefficients for DOFs that do not exist at the node raise
+        ValueError during constraint application, not here.
     """
 
     node_id: int
-    type: str
+    coefficients: list[float]
+    rhs: float = 0.0
 
 
 class _NodalLoadSchema(BaseModel):
@@ -356,9 +355,10 @@ class _FEAModelSchema(BaseModel):
             Defaults to an empty schema (all quantities use canonical system defaults).
         mesh (_MeshSchema): Mesh block containing nodes and elements.
         materials (dict[str, _MaterialSchema]): Named material property map.
-        boundary_conditions (list[_BCSchema]): List of boundary condition entries.
+        boundary_conditions (list[_LinearConstraintSchema]): List of linear constraint entries.
             Defaults to [].
         loads (_LoadsSchema): Loads block. Defaults to empty _LoadsSchema.
+        penalty_alpha (float): Scale factor for penalty stiffness. Default 1e8.
 
     Notes:
         model_validate() is called once in load_model_from_yaml. Field-level errors
@@ -371,8 +371,9 @@ class _FEAModelSchema(BaseModel):
     units: _UnitsSchema = Field(default_factory=_UnitsSchema)
     mesh: _MeshSchema
     materials: dict[str, _MaterialSchema]
-    boundary_conditions: list[_BCSchema] = Field(default_factory=list)
+    boundary_conditions: list[_LinearConstraintSchema] = Field(default_factory=list)
     loads: _LoadsSchema = Field(default_factory=_LoadsSchema)
+    penalty_alpha: float = 1e8
 
 
 class _SolutionEntrySchema(BaseModel):
@@ -386,7 +387,7 @@ class _SolutionEntrySchema(BaseModel):
         label (str): Short solution label (e.g. "coarse", "fine"). Default "".
         mesh (_MeshSchema): Mesh block for this solution.
         materials (dict[str, _MaterialSchema]): Named material properties.
-        boundary_conditions (list[_BCSchema]): Kinematic constraints. Default [].
+        boundary_conditions (list[_LinearConstraintSchema]): Kinematic constraints. Default [].
         loads (_LoadsSchema): Applied loads block. Defaults to empty.
 
     Notes:
@@ -400,7 +401,7 @@ class _SolutionEntrySchema(BaseModel):
     label: str = ""
     mesh: _MeshSchema
     materials: dict[str, _MaterialSchema]
-    boundary_conditions: list[_BCSchema] = Field(default_factory=list)
+    boundary_conditions: list[_LinearConstraintSchema] = Field(default_factory=list)
     loads: _LoadsSchema = Field(default_factory=_LoadsSchema)
 
     model_config = {"extra": "ignore"}
@@ -429,6 +430,7 @@ class _MultiSolutionFileSchema(BaseModel):
     unit_system: str = "SI"
     units: _UnitsSchema = Field(default_factory=_UnitsSchema)
     solutions: list[_SolutionEntrySchema] = Field(min_length=1)
+    penalty_alpha: float = 1e8
 
     model_config = {"extra": "ignore"}
 
@@ -461,7 +463,7 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
         Field-level validation (E > 0, A > 0) was already enforced by Pydantic.
         This function handles unit conversion, cross-entity referential integrity,
         and enum resolution.
-        Enum string lookup uses _ELEMENT_TYPE_MAP, _BC_TYPE_MAP, _LOAD_TYPE_MAP.
+        Enum string lookup uses _ELEMENT_TYPE_MAP, _LOAD_TYPE_MAP.
         Unit conversion pipeline: input unit -> canonical SI -> canonical Empirical (if needed).
     """
     # --- Unit system and converter ---
@@ -544,14 +546,31 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
     mesh = Mesh(nodes=tuple(nodes_list), elements=tuple(elements_list))
 
     # --- Boundary Conditions ---
-    bcs: list[BoundaryCondition] = []
+    penalty_alpha: float = schema.penalty_alpha
+
+    constraints: list[LinearConstraint] = []
     for bc in schema.boundary_conditions:
+        if len(bc.coefficients) != 3:
+            raise ValueError(
+                f"Constraint at node {bc.node_id}: coefficients must have exactly "
+                f"3 elements [a_U, a_V, a_THETA], got {len(bc.coefficients)}."
+            )
         if bc.node_id not in node_ids:
-            raise ValueError(f"BC references unknown node_id={bc.node_id}")
-        bc_type_str = bc.type.lower()
-        if bc_type_str not in _BC_TYPE_MAP:
-            raise ValueError(f"Unknown BC type: '{bc_type_str}'")
-        bcs.append(BoundaryCondition(node_id=bc.node_id, bc_type=_BC_TYPE_MAP[bc_type_str]))
+            raise ValueError(f"Constraint references unknown node_id={bc.node_id}")
+        raw = bc.coefficients
+        mag = math.sqrt(sum(c * c for c in raw))
+        if mag == 0.0:
+            raise ValueError(
+                f"Constraint at node {bc.node_id}: coefficient vector is zero."
+            )
+        normalized = tuple(c / mag for c in raw)
+        constraints.append(
+            LinearConstraint(
+                node_id=bc.node_id,
+                coefficients=(normalized[0], normalized[1], normalized[2]),
+                rhs=bc.rhs,
+            )
+        )
 
     # --- Nodal Loads ---
     _MOMENT_LOAD_TYPES = {"point_moment"}
@@ -606,11 +625,12 @@ def _schema_to_model(schema: _FEAModelSchema, label: str) -> FEAModel:
 
     return FEAModel(
         mesh=mesh,
-        boundary_conditions=tuple(bcs),
+        boundary_conditions=tuple(constraints),
         nodal_loads=tuple(nodal_loads),
         distributed_loads=tuple(dist_loads),
         label=label,
         unit_system=unit_system,
+        penalty_alpha=penalty_alpha,
     )
 
 
@@ -753,6 +773,7 @@ def _parse_multi_solution(
             materials=sol.materials,
             boundary_conditions=sol.boundary_conditions,
             loads=sol.loads,
+            penalty_alpha=file_schema.penalty_alpha,
         )
 
         model = _schema_to_model(merged_schema, composite_label)

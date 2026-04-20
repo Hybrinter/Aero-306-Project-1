@@ -9,7 +9,6 @@
 # Elements: top bar (1-2), two diagonals (1-4, 3-2),
 #            right bar (2-4), bottom bar (3-4)
 #
-# TODO: Verify load directions and boundary conditions from problem image.
 #   - P=100 is applied at node 2 (downward, point_force_y = -100) per image
 #   - Q=50 is applied at node 4 (horizontal, point_force_x = 50) per image
 #   - Node 1 (0,10): pin support (fixed U and V)
@@ -37,11 +36,13 @@ materials:
     I: 0.0       # not used for truss
 
 boundary_conditions:
-  - {node_id: 1, type: pin}        # fixed U and V (pin)
-  - {node_id: 3, type: fixed_u}    # fixed U only (vertical roller -- node slides along x=0 wall)
+  - {node_id: 1, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 1, coefficients: [0.0, 1.0, 0.0]}
+  - {node_id: 3, coefficients: [1.0, 0.0, 0.0]}
+  - {node_id: 3, coefficients: [0.0, 1.0, 0.0]}
 
 loads:
   nodal:
-    - {node_id: 2, type: point_force_y, magnitude: -100.0}   # P = 100 downward
-    - {node_id: 4, type: point_force_x, magnitude:   50.0}   # Q = 50 horizontal
+    - {node_id: 2, type: point_force_y, magnitude: 100.0}   # P = 100 upward
+    - {node_id: 4, type: point_force_x, magnitude: -50.0}   # Q = 50 horizontal-leftward
   distributed: []

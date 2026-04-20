@@ -162,9 +162,9 @@ class TestProblem7:
         assert len(model.mesh.nodes) == 9
 
     def test_fifteen_elements(self, solution) -> None:
-        """Problem 7 has exactly 15 elements."""
+        """Problem 7 has exactly 16 elements."""
         model, _, _ = solution
-        assert len(model.mesh.elements) == 15
+        assert len(model.mesh.elements) == 16
 
     def test_displacement_vector_non_zero(self, solution) -> None:
         """At least one DOF displaces under applied load."""
@@ -175,7 +175,7 @@ class TestProblem7:
         """postprocess_all_elements returns one result per element."""
         model, _, result = solution
         ers = postprocess_all_elements(model, result, n_stations=5)
-        assert len(ers) == 15
+        assert len(ers) == 16
 
     def test_all_element_results_have_zero_shear(self, solution) -> None:
         """All TRUSS ElementResults have zero shear forces."""
