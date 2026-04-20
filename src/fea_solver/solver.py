@@ -43,12 +43,20 @@ def compute_penalty_parameter(K: NDArray[np.float64], penalty_alpha: float) -> f
 def solve_system(
     K_mod: NDArray[np.float64],
     F_mod: NDArray[np.float64],
+    *,
+    penalty_alpha: float | None = None,
 ) -> NDArray[np.float64]:
     """Solve the penalty-modified system K_mod * u = F_mod.
 
     Args:
         K_mod (NDArray[np.float64]): Penalty-modified stiffness matrix, shape (n, n).
         F_mod (NDArray[np.float64]): Penalty-modified force vector, shape (n,).
+        penalty_alpha (float | None): Penalty-scaling factor used to build K_mod,
+            forwarded from FEAModel.penalty_alpha. When supplied, the near-
+            singularity warning is penalty-aware and fires only when
+            cond(K_mod) > 1e8 * penalty_alpha -- the point at which float64
+            precision is genuinely exhausted. When None, a legacy fixed
+            threshold of 1e14 is used.
 
     Returns:
         NDArray[np.float64]: Full displacement vector u, shape (n,).
@@ -57,17 +65,23 @@ def solve_system(
         np.linalg.LinAlgError: If K_mod is singular.
 
     Notes:
-        Condition number is logged. Penalty-modified matrices have condition
-        numbers proportional to penalty_alpha, so warnings above 1e14 are
-        expected and do not indicate a problem for well-posed models.
+        cond(K_mod) is proportional to penalty_alpha by construction, so a
+        fixed absolute threshold trips routinely for well-posed models when
+        penalty_alpha is large. The penalty-aware threshold
+        (1e8 * penalty_alpha) is calibrated to float64 precision: loss of
+        digits is cond * 2e-16, so cond > 1e16 is the point where double
+        precision is actually exhausted.
     """
     cond = float(np.linalg.cond(K_mod))
     logger.debug("K_mod condition number: %.3e", cond)
-    if cond > 1e14:
+    threshold = 1.0e8 * penalty_alpha if penalty_alpha is not None else 1.0e14
+    if cond > threshold:
+        normalized = cond / penalty_alpha if penalty_alpha is not None else cond
         logger.warning(
-            "K_mod is nearly singular (cond=%.3e). For penalty-method models "
-            "this is expected when penalty_alpha is large. Check that all DOFs "
-            "have at least one constraint or stiffness contribution.", cond
+            "K_mod is nearly singular (cond=%.3e, cond/penalty_alpha=%.3e). "
+            "The natural free-partition stiffness is rank-deficient -- check "
+            "for mechanisms, coincident nodes, or DOFs without any stiffness "
+            "contribution.", cond, normalized,
         )
 
     try:
@@ -115,7 +129,7 @@ def run_solve_pipeline(
     K_mod, F_mod = apply_penalty_constraints(
         K, F, model.boundary_conditions, dof_map, k_penalty
     )
-    u = solve_system(K_mod, F_mod)
+    u = solve_system(K_mod, F_mod, penalty_alpha=model.penalty_alpha)
     reactions = compute_constraint_residuals(
         u, model.boundary_conditions, dof_map, k_penalty
     )

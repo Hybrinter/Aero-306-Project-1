@@ -76,6 +76,48 @@ class TestSolveSystem:
         with pytest.raises(np.linalg.LinAlgError):
             solve_system(K, F)
 
+    def test_penalty_aware_threshold_suppresses_expected_cond(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Well-posed model with large penalty_alpha must not warn.
+
+        Builds K_mod with cond = 1e15 and penalty_alpha = 1e8, so
+        cond / penalty_alpha = 1e7. Float64 still has ~9 digits of margin,
+        below the 1e8 * penalty_alpha = 1e16 precision-breakdown threshold.
+        The old fixed 1e14 threshold would (spuriously) fire here.
+        """
+        penalty_alpha = 1.0e8
+        K = np.diag([1.0e15, 1.0])
+        F = np.array([1.0, 1.0])
+        with caplog.at_level("WARNING", logger="fea_solver.solver"):
+            solve_system(K, F, penalty_alpha=penalty_alpha)
+        assert not any("nearly singular" in r.message for r in caplog.records)
+
+    def test_penalty_aware_threshold_fires_on_genuine_near_mechanism(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Warn when cond(K_mod) > 1e8 * penalty_alpha (float64 breakdown).
+
+        Builds K_mod whose cond = 1e17 with penalty_alpha = 1e8, i.e.,
+        cond / penalty_alpha = 1e9 -- decisively past the 1e8 threshold.
+        """
+        penalty_alpha = 1.0e8
+        K = np.diag([1.0e17, 1.0])
+        F = np.array([1.0, 1.0])
+        with caplog.at_level("WARNING", logger="fea_solver.solver"):
+            solve_system(K, F, penalty_alpha=penalty_alpha)
+        assert any("nearly singular" in r.message for r in caplog.records)
+
+    def test_default_threshold_preserved_without_penalty_alpha(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Legacy callers that do not pass penalty_alpha keep the 1e14 threshold."""
+        K = np.diag([1.0e15, 1.0])
+        F = np.array([1.0, 1.0])
+        with caplog.at_level("WARNING", logger="fea_solver.solver"):
+            solve_system(K, F)
+        assert any("nearly singular" in r.message for r in caplog.records)
+
 
 class TestRunSolvePipeline:
     """Tests for run_solve_pipeline."""
